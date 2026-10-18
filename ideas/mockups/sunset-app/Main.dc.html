@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<title>מפת השקיעה</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#A8431A}a:hover{color:#7E3010}
+@keyframes glow{0%,100%{transform:scale(1);opacity:.95}50%{transform:scale(1.12);opacity:1}}
+@keyframes beam{0%,100%{opacity:.75}50%{opacity:1}}
+.dot{animation:glow 3.2s ease-in-out infinite}
+.beam{animation:beam 4s ease-in-out infinite}
+input[type=range]{accent-color:#E2622B}
+</style>
+</helmet>
+<div dir="rtl" style="width: 390px; height: 844px; position: relative; overflow: hidden; background: #FFF4E6; color: #2A1A12; font-family: Rubik, system-ui, sans-serif;">
+
+  <svg width="390" height="600" viewBox="0 0 390 600" aria-hidden="true" style="position: absolute; top: 0; left: 0;">
+    <defs>
+      <linearGradient id="beamGrad" x1="1" y1="0" x2="0" y2="0.3">
+        <stop offset="0" stop-color="#F4B23E" stop-opacity="0.65"></stop>
+        <stop offset="1" stop-color="#E2622B" stop-opacity="0"></stop>
+      </linearGradient>
+      <radialGradient id="sunGrad">
+        <stop offset="0" stop-color="#FFE9B8"></stop>
+        <stop offset="0.45" stop-color="#F4B23E"></stop>
+        <stop offset="1" stop-color="#F4B23E" stop-opacity="0"></stop>
+      </radialGradient>
+    </defs>
+    <rect x="0" y="0" width="390" height="600" fill="#FCE9D4"></rect>
+    <path d="M0 0 H70 C58 120 92 210 64 300 C40 380 78 470 58 600 H0 Z" fill="#F4BFA3"></path>
+    <path d="M14 90 q10 -6 20 0 t20 0 M10 210 q10 -6 20 0 t20 0 M18 330 q10 -6 20 0 t20 0 M8 470 q10 -6 20 0 t20 0" fill="none" stroke="#FCE3D3" stroke-width="2" stroke-linecap="round"></path>
+    <path d="M96 40 C150 20 230 30 280 70 C320 100 360 90 390 80 V210 C330 230 270 200 210 220 C160 236 120 220 92 190 Z" fill="#F8D7B6"></path>
+    <ellipse cx="118" cy="300" rx="70" ry="44" fill="#F1C59C"></ellipse>
+    <ellipse cx="118" cy="300" rx="42" ry="24" fill="#EDB98A"></ellipse>
+    <path d="M150 400 C200 380 280 392 330 420 C360 438 380 470 390 480 V600 H120 C130 540 128 440 150 400 Z" fill="#FBE2C6"></path>
+    <path d="M170 430 L300 455 M165 470 L310 495 M160 510 L320 535 M158 550 L330 575" stroke="#F4CFA6" stroke-width="6" stroke-linecap="round"></path>
+    <ellipse cx="300" cy="290" rx="54" ry="36" fill="#F6CFAA"></ellipse>
+    <path d="M390 250 C330 270 290 340 250 360 C215 378 200 410 215 430 C228 448 250 470 236 520 C226 556 240 590 236 600" fill="none" stroke="#FFFFFF" stroke-width="5" stroke-linecap="round" opacity="0.85"></path>
+    <polygon class="beam" points="215,430 -17,548 -45,444" fill="url(#beamGrad)"></polygon>
+    <circle cx="16" cy="478" r="58" fill="url(#sunGrad)"></circle>
+    <circle cx="16" cy="478" r="18" fill="#F7A23A"></circle>
+    <circle cx="215" cy="430" r="13" fill="#FFFFFF"></circle>
+    <circle cx="215" cy="430" r="8" fill="#2A1A12"></circle>
+  </svg>
+
+  <sc-for list="{{spots}}" as="spot" hint-placeholder-count="5">
+    <div class="dot" style="position: absolute; left: {{spot.left}}px; top: {{spot.top}}px; width: {{spot.size}}px; height: {{spot.size}}px; border-radius: 50%; background: radial-gradient(circle, #FFF2CF 0%, #F4B23E 38%, rgba(226,98,43,0.55) 62%, rgba(226,98,43,0) 74%);"></div>
+    <div style="position: absolute; left: {{spot.labelLeft}}px; top: {{spot.labelTop}}px; width: 110px; text-align: center; font-size: 11px; font-weight: 500; color: #4A2E20;">{{spot.name}}</div>
+  </sc-for>
+
+  <div style="position: absolute; top: 20px; right: 16px; left: 16px; display: flex; align-items: center; gap: 12px; padding: 14px 16px; background: rgba(255,250,243,0.94); border-radius: 22px; box-shadow: 0 8px 24px rgba(168,67,26,0.12);">
+    <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#E2622B" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M3 18h18"></path><path d="M7 18a5 5 0 0 1 10 0"></path><path d="M12 8V5"></path><path d="M5.6 11.6 3.9 9.9"></path><path d="M18.4 11.6l1.7-1.7"></path></svg>
+    <div style="display: flex; flex-direction: column; gap: 2px; flex-grow: 1;">
+      <div style="font-size: 13px; color: #6B4A3A;">השקיעה היום</div>
+      <div style="font-size: 22px; font-weight: 700; letter-spacing: 0.5px;">17:24</div>
+    </div>
+    <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 2px;">
+      <div style="font-size: 13px; color: #6B4A3A;">בעוד</div>
+      <div style="font-size: 18px; font-weight: 600; color: #A8431A;">1:12 שע'</div>
+    </div>
+  </div>
+
+  <div style="position: absolute; top: 108px; right: 16px; padding: 6px 12px; background: rgba(255,250,243,0.9); border-radius: 999px; font-size: 12px; color: #6B4A3A;">כיוון השקיעה: מערב־דרום־מערב</div>
+
+  <button aria-label="הוסף מקום" style="position: absolute; top: 452px; left: 16px; width: 52px; height: 52px; border-radius: 50%; border: none; background: #2A1A12; color: #FFF4E6; display: flex; align-items: center; justify-content: center; box-shadow: 0 6px 18px rgba(42,26,18,0.25); cursor: pointer;">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14"></path><path d="M5 12h14"></path></svg>
+  </button>
+
+  <div style="position: absolute; bottom: 0; right: 0; left: 0; height: 324px; box-sizing: border-box; padding: 12px 20px 24px; background: #FFFAF3; border-radius: 28px 28px 0 0; box-shadow: 0 -10px 30px rgba(168,67,26,0.10); display: flex; flex-direction: column; gap: 14px;">
+    <div style="align-self: center; width: 40px; height: 5px; border-radius: 3px; background: #EAD3BE;"></div>
+
+    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+      <sc-for list="{{chips}}" as="chip" hint-placeholder-count="3">
+        <button aria-pressed="{{chip.pressed}}" onClick="{{chip.toggle}}" style="{{chip.style}}">{{chip.label}}</button>
+      </sc-for>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 6px;">
+      <label for="balance" style="display: flex; justify-content: space-between; font-size: 13px; color: #6B4A3A;"><span>נוחות</span><span style="font-weight: 600; color: #2A1A12;">מה חשוב לך הערב?</span><span>נוף</span></label>
+      <input id="balance" type="range" min="0" max="100" value="{{balance}}" onChange="{{onBalance}}" style="width: 100%; height: 28px; margin: 0;">
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 8px;">
+      <sc-for list="{{top}}" as="row" hint-placeholder-count="3">
+        <sc-if value="{{row.isTree}}" hint-placeholder-val="{{true}}">
+          <a href="Spot.dc.html" style="display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 8px 12px; border-radius: 16px; background: #FDEBDA; color: #2A1A12; text-decoration: none;">
+            <div style="width: 28px; height: 28px; border-radius: 50%; background: #E2622B; color: #FFFFFF; font-size: 14px; font-weight: 700; display: flex; align-items: center; justify-content: center;">{{row.rank}}</div>
+            <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 2px;">
+              <div style="font-size: 15px; font-weight: 600;">{{row.name}}</div>
+              <div style="font-size: 12px; color: #6B4A3A;">{{row.meta}}</div>
+            </div>
+            <div style="font-size: 18px; font-weight: 700; color: #A8431A;">{{row.score}}</div>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#A8431A" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"></path></svg>
+          </a>
+        </sc-if>
+        <sc-if value="{{row.notTree}}" hint-placeholder-val="{{false}}">
+          <div style="display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 8px 12px; border-radius: 16px; background: #FFF4E6;">
+            <div style="width: 28px; height: 28px; border-radius: 50%; background: #F7C4A2; color: #2A1A12; font-size: 14px; font-weight: 700; display: flex; align-items: center; justify-content: center;">{{row.rank}}</div>
+            <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 2px;">
+              <div style="font-size: 15px; font-weight: 600;">{{row.name}}</div>
+              <div style="font-size: 12px; color: #6B4A3A;">{{row.meta}}</div>
+            </div>
+            <div style="font-size: 18px; font-weight: 700; color: #A8431A;">{{row.score}}</div>
+          </div>
+        </sc-if>
+      </sc-for>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { balance: 35, walk: false, seat: false, car: false };
+  }
+  renderVals() {
+    const s = this.state;
+    const w = s.balance / 100;
+    const all = [
+      { id: 'tree', name: 'העץ הבודד', x: 165, y: 455, view: 78, access: 95, pleasant: 96, walk: 3, seat: true, car: true },
+      { id: 'bench', name: 'ספסל בשולי השדה', x: 268, y: 498, view: 80, access: 90, pleasant: 74, walk: 2, seat: true, car: true },
+      { id: 'hill', name: 'גבעת התצפית', x: 112, y: 296, view: 97, access: 52, pleasant: 58, walk: 15, seat: false, car: false },
+      { id: 'coast', name: 'מצוק החוף', x: 38, y: 372, view: 99, access: 72, pleasant: 66, walk: 8, seat: false, car: true },
+      { id: 'picnic', name: 'פינת הפיקניק', x: 300, y: 286, view: 63, access: 86, pleasant: 92, walk: 4, seat: true, car: true }
+    ];
+    const visible = all
+      .filter((p) => (!s.walk || p.walk <= 5) && (!s.seat || p.seat) && (!s.car || p.car))
+      .map((p) => {
+        const score = Math.round(w * p.view + (1 - w) * (p.access + p.pleasant) / 2);
+        const size = Math.round(22 + Math.max(0, score - 50) * 0.9);
+        return Object.assign({}, p, {
+          score: score,
+          size: size,
+          left: p.x - size / 2,
+          top: p.y - size / 2,
+          labelLeft: p.x - 55,
+          labelTop: p.y + size / 2 - 2,
+          meta: p.walk + " דק' הליכה" + (p.seat ? ' · יש ישיבה' : '')
+        });
+      });
+    const top = visible.slice().sort((a, b) => b.score - a.score).slice(0, 3)
+      .map((p, i) => Object.assign({}, p, { rank: i + 1, isTree: p.id === 'tree', notTree: p.id !== 'tree' }));
+    const chipDefs = [
+      { key: 'walk', label: "עד 5 דק' הליכה" },
+      { key: 'seat', label: 'עם ישיבה' },
+      { key: 'car', label: 'רכב רגיל' }
+    ];
+    const chips = chipDefs.map((c) => {
+      const on = !!s[c.key];
+      return {
+        label: c.label,
+        pressed: on ? 'true' : 'false',
+        toggle: () => this.setState({ [c.key]: !on }),
+        style: 'min-height: 36px; padding: 0 14px; border-radius: 999px; font-family: inherit; font-size: 13px; font-weight: 500; cursor: pointer; ' +
+          (on ? 'background: #2A1A12; color: #FFF4E6; border: 1px solid #2A1A12;' : 'background: #FFFFFF; color: #4A2E20; border: 1px solid #EAD3BE;')
+      };
+    });
+    return {
+      spots: visible,
+      top: top,
+      chips: chips,
+      balance: s.balance,
+      onBalance: (e) => this.setState({ balance: Number(e.target.value) })
+    };
+  }
+}
+</script>
+</body>
+</html>
