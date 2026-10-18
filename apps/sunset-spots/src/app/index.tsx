@@ -1,9 +1,13 @@
+import { useState } from 'react';
 import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { BALANCE_OPTIONS, BalancePicker, SpotList, type BalanceKey } from '../components/SpotList';
 import { SunCompass } from '../components/SunCompass';
 import { useHeading } from '../hooks/useHeading';
 import { useLocation } from '../hooks/useLocation';
 import { useNow } from '../hooks/useNow';
+import { useSpots } from '../hooks/useSpots';
+import { rankSpots } from '../lib/score';
 import { angleBetween, bearingToHebrew, formatClock, formatCountdown, getSunsetInfo } from '../lib/sun';
 import { colors, fonts } from '../theme';
 
@@ -13,6 +17,8 @@ export default function SunsetScreen() {
   const { state, retry } = useLocation();
   const now = useNow();
   const heading = useHeading(Platform.OS !== 'web');
+  const spots = useSpots(state.status === 'loading' ? null : state.coords);
+  const [balance, setBalance] = useState<BalanceKey>('balanced');
 
   if (state.status === 'loading') {
     return (
@@ -79,7 +85,31 @@ export default function SunsetScreen() {
           </View>
         )}
 
-        <Text style={styles.soon}>בקרוב: מקומות מומלצים לשקיעה סביבך</Text>
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>מקומות לשקיעה סביבך</Text>
+          <BalancePicker value={balance} onChange={setBalance} />
+          {spots.state.status === 'loading' && <Text style={styles.muted}>מחפש מקומות…</Text>}
+          {spots.state.status === 'error' && (
+            <View style={styles.notice}>
+              <Text style={styles.noticeText}>לא הצלחנו לטעון מקומות מהמפה.</Text>
+              <Pressable onPress={spots.retry} style={styles.button} accessibilityRole="button">
+                <Text style={styles.buttonText}>לנסות שוב</Text>
+              </Pressable>
+            </View>
+          )}
+          {spots.state.status === 'ready' && (
+            <SpotList
+              spots={rankSpots(
+                spots.state.spots,
+                { lat: latitude, lon: longitude },
+                info.bearing,
+                BALANCE_OPTIONS.find((o) => o.key === balance)!.weight,
+              ).slice(0, 6)}
+            />
+          )}
+        </View>
+
+        <Text style={styles.soon}>נתוני מקומות: © OpenStreetMap contributors</Text>
       </ScrollView>
     </SafeAreaView>
   );
@@ -127,6 +157,8 @@ const styles = StyleSheet.create({
   noticeText: { fontFamily: fonts.regular, fontSize: 14, color: colors.inkSoft, textAlign: 'right' },
   button: { minHeight: 44, paddingHorizontal: 18, justifyContent: 'center', backgroundColor: colors.ink, borderRadius: 14 },
   buttonText: { fontFamily: fonts.semibold, fontSize: 15, color: colors.ground },
-  muted: { fontFamily: fonts.regular, fontSize: 15, color: colors.muted },
+  muted: { fontFamily: fonts.regular, fontSize: 15, color: colors.muted, textAlign: 'center' },
+  section: { gap: 12 },
+  sectionTitle: { fontFamily: fonts.bold, fontSize: 20, color: colors.ink, textAlign: 'right' },
   soon: { fontFamily: fonts.regular, fontSize: 13, color: colors.muted, textAlign: 'center' },
 });
