@@ -20,8 +20,15 @@ def paths(S):
         if m < 36: return 0.6 * S
         if m < 60: return 9500
         return ramp(m - 60, 16000, 28000)
+    def mkt_job(m):  # 6mo evening course while working, job hunt while employed, then junior 9.5k->17k
+        if m < 9: return stay(m)
+        return ramp(m - 9, 9500, 17000)
+    def mkt_side(m):  # keep the job; freelance clients from month 6 ramp 0->5k/mo over 3y; tools 300/mo
+        side = 0 if m < 6 else ramp(m - 6, 0, 5000, 36)
+        return stay(m) + side - 300
     return stay, {"CS degree": (cs, 35000), "Bootcamp": (boot, 40000),
-                  "Econ/MBA evening": (econ, 45000), "CPA": (cpa, 50000)}
+                  "Econ/MBA evening": (econ, 45000), "CPA": (cpa, 50000),
+                  "Marketing job": (mkt_job, 8000), "Marketing side biz": (mkt_side, 8000)}
 
 for S in (9000, 13000, 17000):
     stay, ps = paths(S)
