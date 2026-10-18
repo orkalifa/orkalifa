@@ -1,0 +1,38 @@
+{
+  "expo": {
+    "name": "שקיעה",
+    "slug": "sunset-spots",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.orkalifa.sunsetspots"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#FFF4E6",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "package": "com.orkalifa.sunsetspots"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-font",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "האפליקציה משתמשת במיקום שלך כדי לחשב את כיוון ושעת השקיעה ולמצוא מקומות קרובים."
+        }
+      ]
+    ],
+    "scheme": "sunsetspots"
+  }
+}
