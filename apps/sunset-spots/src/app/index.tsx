@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { BALANCE_OPTIONS, BalancePicker, SpotList, type BalanceKey } from '../components/SpotList';
 import { SunCompass } from '../components/SunCompass';
 import { useHeading } from '../hooks/useHeading';
+import { useHorizons } from '../hooks/useHorizons';
 import { useLocation } from '../hooks/useLocation';
 import { useNow } from '../hooks/useNow';
 import { useSpots } from '../hooks/useSpots';
@@ -17,7 +18,10 @@ export default function SunsetScreen() {
   const { state, retry } = useLocation();
   const now = useNow();
   const heading = useHeading(Platform.OS !== 'web');
-  const spots = useSpots(state.status === 'loading' ? null : state.coords);
+  const coords = state.status === 'loading' ? null : state.coords;
+  const spots = useSpots(coords);
+  const info = coords ? getSunsetInfo(coords.latitude, coords.longitude, now) : null;
+  const horizons = useHorizons(spots.state.status === 'ready' ? spots.state.spots : null, coords, info?.bearing ?? null);
   const [balance, setBalance] = useState<BalanceKey>('balanced');
 
   if (state.status === 'loading') {
@@ -29,7 +33,6 @@ export default function SunsetScreen() {
   }
 
   const { latitude, longitude } = state.coords;
-  const info = getSunsetInfo(latitude, longitude, now);
   if (!info) {
     return (
       <SafeAreaView style={[styles.screen, styles.center]}>
@@ -104,12 +107,19 @@ export default function SunsetScreen() {
                 { lat: latitude, lon: longitude },
                 info.bearing,
                 BALANCE_OPTIONS.find((o) => o.key === balance)!.weight,
+                horizons.horizons,
               ).slice(0, 6)}
             />
           )}
+          {spots.state.status === 'ready' && horizons.status === 'idle' && (
+            <Text style={styles.soon}>בודק את קו האופק לכיוון השקיעה…</Text>
+          )}
+          {spots.state.status === 'ready' && horizons.status === 'error' && (
+            <Text style={styles.soon}>בדיקת קו האופק לא הצליחה, אז הדירוג מבוסס על סוג המקום.</Text>
+          )}
         </View>
 
-        <Text style={styles.soon}>נתוני מקומות: © OpenStreetMap contributors</Text>
+        <Text style={styles.soon}>נתוני מקומות: © OpenStreetMap contributors · נתוני גובה: Open-Meteo (Copernicus DEM)</Text>
       </ScrollView>
     </SafeAreaView>
   );

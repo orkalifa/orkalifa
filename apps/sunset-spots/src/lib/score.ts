@@ -1,4 +1,5 @@
 import { distanceMeters, type LatLon } from './geo.ts';
+import { horizonScore, type Horizon } from './horizon.ts';
 import type { Spot, SpotKind } from './osm.ts';
 
 export type ScoredSpot = Spot & {
@@ -47,13 +48,15 @@ const BASE_VIEW: Record<SpotKind, number> = { viewpoint: 85, peak: 80, picnic: 6
 
 /**
  * Scores a spot for tonight. `viewWeight` is the "comfort ↔ view" slider: 0 = only comfort, 1 = only view.
- * View is provisional until the terrain (DEM) horizon check lands; access is distance from you for now.
+ * With a `horizon` (terrain check) the view score is mostly how open the horizon is toward the sunset;
+ * without one it falls back to the spot type and its OSM `direction`. Access is distance from you for now.
  */
 export function scoreSpot(
   spot: Spot,
   from: LatLon,
   sunsetBearing: number,
   viewWeight = 0.4,
+  horizon?: Horizon,
 ): ScoredSpot {
   const reasons: string[] = [];
   const kinds = new Set<SpotKind>([spot.kind, ...spot.nearby]);
@@ -67,6 +70,12 @@ export function scoreSpot(
     } else if (!withinArc(sunsetBearing, facing, 60)) {
       view -= 30;
     }
+  }
+  if (horizon) {
+    view = 0.7 * horizonScore(horizon) + 0.3 * view;
+    if (horizon.sea && horizon.angle <= 0.5) reasons.push('אופק ים');
+    else if (horizon.angle <= 0.5) reasons.push('אופק פתוח');
+    else if (horizon.angle > 2) reasons.push('האופק חסום חלקית');
   }
   if (spot.kind === 'viewpoint') reasons.push('נקודת תצפית');
   if (spot.kind === 'peak') reasons.push('פסגה');
@@ -102,6 +111,9 @@ export function rankSpots(
   from: LatLon,
   sunsetBearing: number,
   viewWeight = 0.4,
+  horizons: Record<string, Horizon> = {},
 ): ScoredSpot[] {
-  return spots.map((s) => scoreSpot(s, from, sunsetBearing, viewWeight)).sort((a, b) => b.score - a.score);
+  return spots
+    .map((s) => scoreSpot(s, from, sunsetBearing, viewWeight, horizons[s.id]))
+    .sort((a, b) => b.score - a.score);
 }

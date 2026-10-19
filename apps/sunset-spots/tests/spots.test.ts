@@ -76,3 +76,15 @@ test('the slider moves the ranking between comfort and view', () => {
   assert.equal(view[0].id, 'node/3');
   for (const s of view) assert.ok(s.score >= 0 && s.score <= 100);
 });
+
+test('a blocked horizon pulls a spot down, an open one lifts it', () => {
+  const merged = mergeNearby(parseOverpass(FIXTURE as never));
+  const bench = merged.find((s) => s.kind === 'bench')!;
+  const open = scoreSpot(bench, HOME, SUNSET, 1, { angle: 0, sea: false });
+  const blocked = scoreSpot(bench, HOME, SUNSET, 1, { angle: 4, sea: false });
+  const unknown = scoreSpot(bench, HOME, SUNSET, 1);
+  assert.ok(open.view > unknown.view && unknown.view > blocked.view);
+  assert.ok(open.reasons.includes('אופק פתוח'));
+  assert.ok(blocked.reasons.includes('האופק חסום חלקית'));
+});
+

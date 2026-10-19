@@ -24,3 +24,14 @@ export function formatDistance(meters: number): string {
   if (meters < 1000) return `${Math.round(meters / 10) * 10} מ'`;
   return `${(meters / 1000).toFixed(1)} ק"מ`;
 }
+
+/** The point `distanceMeters` away from `from` along `bearing` (degrees from north). */
+export function destinationPoint(from: LatLon, bearing: number, distanceMeters: number): LatLon {
+  const d = distanceMeters / EARTH_RADIUS_M;
+  const b = toRad(bearing);
+  const lat1 = toRad(from.lat);
+  const lon1 = toRad(from.lon);
+  const lat2 = Math.asin(Math.sin(lat1) * Math.cos(d) + Math.cos(lat1) * Math.sin(d) * Math.cos(b));
+  const lon2 = lon1 + Math.atan2(Math.sin(b) * Math.sin(d) * Math.cos(lat1), Math.cos(d) - Math.sin(lat1) * Math.sin(lat2));
+  return { lat: toDeg(lat2), lon: ((toDeg(lon2) + 540) % 360) - 180 };
+}
