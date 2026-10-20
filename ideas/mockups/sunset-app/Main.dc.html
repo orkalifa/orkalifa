@@ -52,10 +52,11 @@ input[type=range]{accent-color:#E2622B}
   </svg>
 
   <sc-for list="{{spots}}" as="spot" hint-placeholder-count="5">
-    <div class="halo" style="position: absolute; left: {{spot.haloLeft}}px; top: {{spot.haloTop}}px; width: {{spot.halo}}px; height: {{spot.halo}}px; border-radius: 50%; background: {{spot.haloColor}};"></div>
-    <div style="position: absolute; left: {{spot.left}}px; top: {{spot.top}}px; width: {{spot.size}}px; height: {{spot.size}}px; box-sizing: border-box; border-radius: 50%; background: {{spot.fill}}; border: 3px solid #FFFFFF; box-shadow: 0 4px 10px rgba(42,26,18,0.28); display: flex; align-items: center; justify-content: center;">
-      <svg width="{{spot.icon}}" height="{{spot.icon}}" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M4 17h16"></path><path d="M7.5 17a4.5 4.5 0 0 1 9 0"></path><path d="M12 8.5V6"></path><path d="M6.3 11.3 4.8 9.8"></path><path d="M17.7 11.3l1.5-1.5"></path></svg>
-    </div>
+    <div class="halo" style="position: absolute; left: {{spot.shadowLeft}}px; top: {{spot.shadowTop}}px; width: 24px; height: 9px; border-radius: 50%; background: {{spot.haloColor}};"></div>
+    <svg width="{{spot.pinW}}" height="{{spot.pinH}}" viewBox="0 0 40 50" aria-hidden="true" style="position: absolute; left: {{spot.pinLeft}}px; top: {{spot.pinTop}}px; filter: drop-shadow(0 3px 4px rgba(42,26,18,0.28));">
+      <path d="M20 48C20 48 4 31 4 19A16 16 0 1 1 36 19C36 31 20 48 20 48Z" fill="{{spot.fill}}" stroke="#FFFFFF" stroke-width="3"></path>
+      <g transform="translate(10 9) scale(0.8333)"><path d="{{spot.iconPath}}" fill="none" stroke="#FFFFFF" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"></path></g>
+    </svg>
     <div style="position: absolute; left: {{spot.labelLeft}}px; top: {{spot.labelTop}}px; width: 110px; text-align: center; font-size: 11px; font-weight: 500; color: #4A2E20;">{{spot.name}}</div>
   </sc-for>
 
@@ -135,23 +136,30 @@ class Component extends DCLogic {
       { id: 'coast', name: 'מצוק החוף', x: 38, y: 372, view: 99, access: 72, pleasant: 66, walk: 8, seat: false, car: true },
       { id: 'picnic', name: 'פינת הפיקניק', x: 300, y: 286, view: 63, access: 86, pleasant: 92, walk: 4, seat: true, car: true }
     ];
+    const ICONS = {
+      tree: 'M7 9a5 5 0 1 0 10 0a5 5 0 1 0 -10 0M12 14v7M9 21h6',
+      bench: 'M4 10h16M4 14h16M6 14v5M18 14v5',
+      hill: 'M3 19l6-10 4 6 2-3 6 7z',
+      coast: 'M2 12s4-6 10-6 10 6 10 6-4 6-10 6S2 12 2 12zM9.5 12a2.5 2.5 0 1 0 5 0a2.5 2.5 0 1 0 -5 0',
+      picnic: 'M5 8h14M8 8l-3 11M16 8l3 11M6 14h12'
+    };
     const visible = all
       .filter((p) => (!s.walk || p.walk <= 5) && (!s.seat || p.seat) && (!s.car || p.car))
       .map((p) => {
         const score = Math.round(w * p.view + (1 - w) * (p.access + p.pleasant) / 2);
-        const size = Math.round(26 + Math.max(0, score - 50) * 0.5);
-        const halo = size + 18;
+        const pinW = Math.round(32 + Math.max(0, score - 50) * 0.3);
+        const pinH = Math.round(pinW * 1.25);
         return Object.assign({}, p, {
           score: score,
-          size: size,
-          left: p.x - size / 2,
-          top: p.y - size / 2,
-          halo: halo,
-          haloLeft: p.x - halo / 2,
-          haloTop: p.y - halo / 2,
-          icon: Math.round(size * 0.5),
+          pinW: pinW,
+          pinH: pinH,
+          pinLeft: p.x - pinW / 2,
+          pinTop: p.y - pinH,
+          shadowLeft: p.x - 12,
+          shadowTop: p.y - 4,
+          iconPath: ICONS[p.id],
           labelLeft: p.x - 55,
-          labelTop: p.y + size / 2 + 4,
+          labelTop: p.y + 6,
           meta: p.walk + " דק' הליכה" + (p.seat ? ' · יש ישיבה' : '')
         });
       });
@@ -159,7 +167,7 @@ class Component extends DCLogic {
     visible.forEach((p) => {
       const best = p.id === bestId;
       p.fill = best ? '#E2622B' : '#EE9A62';
-      p.haloColor = best ? 'rgba(226,98,43,0.22)' : 'rgba(238,154,98,0.18)';
+      p.haloColor = best ? 'rgba(168,67,26,0.30)' : 'rgba(42,26,18,0.18)';
     });
     const top = visible.slice().sort((a, b) => b.score - a.score).slice(0, 3)
       .map((p, i) => Object.assign({}, p, { rank: i + 1, isTree: p.id === 'tree', notTree: p.id !== 'tree' }));

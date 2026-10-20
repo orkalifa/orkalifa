@@ -2,6 +2,7 @@ import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { formatDistance } from '../lib/geo';
 import type { SpotKind } from '../lib/osm';
 import type { ScoredSpot } from '../lib/score';
+import { SpotPin } from './SpotPin';
 import { colors, fonts } from '../theme';
 
 const KIND_LABEL: Record<SpotKind, string> = {
@@ -53,9 +54,7 @@ export function SpotList({ spots }: { spots: ScoredSpot[] }) {
     <View style={styles.list}>
       {spots.map((spot, i) => (
         <View key={spot.id} style={[styles.row, i === 0 && styles.rowTop]}>
-          <View style={[styles.rank, i === 0 && styles.rankTop]}>
-            <Text style={[styles.rankText, i === 0 && styles.rankTextTop]}>{i + 1}</Text>
-          </View>
+          <SpotPin kind={spot.kind} highlight={i === 0} size={28} />
           <View style={styles.body}>
             <Text style={styles.name} numberOfLines={1}>
               {spot.name ?? KIND_LABEL[spot.kind]}
@@ -85,10 +84,6 @@ const styles = StyleSheet.create({
   list: { gap: 8 },
   row: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10, padding: 12, borderRadius: 18, backgroundColor: colors.surface },
   rowTop: { backgroundColor: '#FDEBDA' },
-  rank: { width: 30, height: 30, borderRadius: 15, backgroundColor: colors.peach, alignItems: 'center', justifyContent: 'center' },
-  rankTop: { backgroundColor: colors.orange },
-  rankText: { fontFamily: fonts.bold, fontSize: 14, color: colors.ink },
-  rankTextTop: { color: colors.white },
   body: { flex: 1, gap: 2, alignItems: 'flex-end' },
   name: { fontFamily: fonts.semibold, fontSize: 16, color: colors.ink, textAlign: 'right' },
   meta: { fontFamily: fonts.regular, fontSize: 12, color: colors.muted, textAlign: 'right' },
