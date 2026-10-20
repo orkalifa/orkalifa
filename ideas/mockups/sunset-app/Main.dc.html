@@ -13,9 +13,9 @@
 <style>
 body{margin:0}
 a{color:#A8431A}a:hover{color:#7E3010}
-@keyframes glow{0%,100%{transform:scale(1);opacity:.95}50%{transform:scale(1.12);opacity:1}}
+@keyframes halo{0%,100%{transform:scale(1);opacity:.9}50%{transform:scale(1.18);opacity:.5}}
 @keyframes beam{0%,100%{opacity:.75}50%{opacity:1}}
-.dot{animation:glow 3.2s ease-in-out infinite}
+.halo{animation:halo 3.2s ease-in-out infinite}
 .beam{animation:beam 4s ease-in-out infinite}
 input[type=range]{accent-color:#E2622B}
 </style>
@@ -52,7 +52,10 @@ input[type=range]{accent-color:#E2622B}
   </svg>
 
   <sc-for list="{{spots}}" as="spot" hint-placeholder-count="5">
-    <div class="dot" style="position: absolute; left: {{spot.left}}px; top: {{spot.top}}px; width: {{spot.size}}px; height: {{spot.size}}px; border-radius: 50%; background: radial-gradient(circle, #FFF2CF 0%, #F4B23E 38%, rgba(226,98,43,0.55) 62%, rgba(226,98,43,0) 74%);"></div>
+    <div class="halo" style="position: absolute; left: {{spot.haloLeft}}px; top: {{spot.haloTop}}px; width: {{spot.halo}}px; height: {{spot.halo}}px; border-radius: 50%; background: {{spot.haloColor}};"></div>
+    <div style="position: absolute; left: {{spot.left}}px; top: {{spot.top}}px; width: {{spot.size}}px; height: {{spot.size}}px; box-sizing: border-box; border-radius: 50%; background: {{spot.fill}}; border: 3px solid #FFFFFF; box-shadow: 0 4px 10px rgba(42,26,18,0.28); display: flex; align-items: center; justify-content: center;">
+      <svg width="{{spot.icon}}" height="{{spot.icon}}" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M4 17h16"></path><path d="M7.5 17a4.5 4.5 0 0 1 9 0"></path><path d="M12 8.5V6"></path><path d="M6.3 11.3 4.8 9.8"></path><path d="M17.7 11.3l1.5-1.5"></path></svg>
+    </div>
     <div style="position: absolute; left: {{spot.labelLeft}}px; top: {{spot.labelTop}}px; width: 110px; text-align: center; font-size: 11px; font-weight: 500; color: #4A2E20;">{{spot.name}}</div>
   </sc-for>
 
@@ -136,17 +139,28 @@ class Component extends DCLogic {
       .filter((p) => (!s.walk || p.walk <= 5) && (!s.seat || p.seat) && (!s.car || p.car))
       .map((p) => {
         const score = Math.round(w * p.view + (1 - w) * (p.access + p.pleasant) / 2);
-        const size = Math.round(22 + Math.max(0, score - 50) * 0.9);
+        const size = Math.round(26 + Math.max(0, score - 50) * 0.5);
+        const halo = size + 18;
         return Object.assign({}, p, {
           score: score,
           size: size,
           left: p.x - size / 2,
           top: p.y - size / 2,
+          halo: halo,
+          haloLeft: p.x - halo / 2,
+          haloTop: p.y - halo / 2,
+          icon: Math.round(size * 0.5),
           labelLeft: p.x - 55,
-          labelTop: p.y + size / 2 - 2,
+          labelTop: p.y + size / 2 + 4,
           meta: p.walk + " דק' הליכה" + (p.seat ? ' · יש ישיבה' : '')
         });
       });
+    const bestId = visible.length ? visible.slice().sort((a, b) => b.score - a.score)[0].id : null;
+    visible.forEach((p) => {
+      const best = p.id === bestId;
+      p.fill = best ? '#E2622B' : '#EE9A62';
+      p.haloColor = best ? 'rgba(226,98,43,0.22)' : 'rgba(238,154,98,0.18)';
+    });
     const top = visible.slice().sort((a, b) => b.score - a.score).slice(0, 3)
       .map((p, i) => Object.assign({}, p, { rank: i + 1, isTree: p.id === 'tree', notTree: p.id !== 'tree' }));
     const chipDefs = [
