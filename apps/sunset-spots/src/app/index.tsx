@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { BALANCE_OPTIONS, BalancePicker, SpotList, type BalanceKey } from '../components/SpotList';
+import { SpotMap } from '../components/SpotMap';
 import { SunCompass } from '../components/SunCompass';
 import { useHeading } from '../hooks/useHeading';
 import { useHorizons } from '../hooks/useHorizons';
@@ -41,6 +42,16 @@ export default function SunsetScreen() {
     );
   }
 
+  const ranked =
+    spots.state.status === 'ready'
+      ? rankSpots(
+          spots.state.spots,
+          { lat: latitude, lon: longitude },
+          info.bearing,
+          BALANCE_OPTIONS.find((o) => o.key === balance)!.weight,
+          horizons.horizons,
+        ).slice(0, 6)
+      : null;
   const offset = heading === null ? null : angleBetween(heading, info.bearing);
   const aligned = offset !== null && Math.abs(offset) <= ALIGNED_DEGREES;
 
@@ -100,16 +111,11 @@ export default function SunsetScreen() {
               </Pressable>
             </View>
           )}
-          {spots.state.status === 'ready' && (
-            <SpotList
-              spots={rankSpots(
-                spots.state.spots,
-                { lat: latitude, lon: longitude },
-                info.bearing,
-                BALANCE_OPTIONS.find((o) => o.key === balance)!.weight,
-                horizons.horizons,
-              ).slice(0, 6)}
-            />
+          {ranked && (
+            <>
+              <SpotMap from={{ lat: latitude, lon: longitude }} sunsetBearing={info.bearing} spots={ranked} />
+              <SpotList spots={ranked} />
+            </>
           )}
           {spots.state.status === 'ready' && horizons.status === 'idle' && (
             <Text style={styles.soon}>בודק את קו האופק לכיוון השקיעה…</Text>
