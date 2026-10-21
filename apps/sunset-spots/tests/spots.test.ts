@@ -88,3 +88,20 @@ test('a blocked horizon pulls a spot down, an open one lifts it', () => {
   assert.ok(blocked.reasons.includes('האופק חסום חלקית'));
 });
 
+
+test('roads query: main roads far, small streets near', async () => {
+  const { buildRoadsQuery, parseRoads } = await import('../src/lib/osm.ts');
+  const q = buildRoadsQuery(HOME, 10000);
+  assert.match(q, /way\(around:10000,32\.08,34\.78\)\["highway"~"\^\(motorway\|trunk\|primary\|secondary\|tertiary\)\$"\]/);
+  assert.match(q, /way\(around:3000,/);
+  assert.match(q, /out geom;$/);
+  const roads = parseRoads({
+    elements: [
+      { type: 'way', id: 1, tags: { highway: 'primary' }, geometry: [{ lat: 32, lon: 34.7 }, { lat: 32.1, lon: 34.8 }] },
+      { type: 'way', id: 2, tags: { highway: 'residential' }, geometry: [{ lat: 32, lon: 34.7 }, { lat: 32.01, lon: 34.71 }] },
+      { type: 'way', id: 3, tags: { highway: 'primary' }, geometry: [{ lat: 32, lon: 34.7 }] },
+      { type: 'node', id: 4 },
+    ],
+  });
+  assert.deepEqual(roads.map((r) => [r.id, r.major]), [['way/1', true], ['way/2', false]]);
+});

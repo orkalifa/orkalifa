@@ -95,3 +95,39 @@ export async function fetchCandidates(center: LatLon, radiusMeters: number, sign
   if (!response.ok) throw new Error(`Overpass ${response.status}`);
   return parseOverpass(await response.json());
 }
+
+export type Road = { id: string; major: boolean; points: LatLon[] };
+
+const MAJOR_ROADS = 'motorway|trunk|primary|secondary|tertiary';
+const MINOR_ROADS = 'unclassified|residential|living_street';
+
+/** Main roads out to `radiusMeters`, small streets only close by (a city has thousands of them). */
+export function buildRoadsQuery(center: LatLon, radiusMeters: number): string {
+  const at = (r: number) => `(around:${Math.round(r)},${center.lat},${center.lon})`;
+  return (
+    `[out:json][timeout:25];(` +
+    `way${at(radiusMeters)}["highway"~"^(${MAJOR_ROADS})$"];` +
+    `way${at(Math.min(radiusMeters, 3000))}["highway"~"^(${MINOR_ROADS})$"];` +
+    `);out geom;`
+  );
+}
+
+type OverpassWay = { type: string; id: number; tags?: Record<string, string>; geometry?: LatLon[] };
+
+export function parseRoads(json: { elements?: OverpassWay[] }): Road[] {
+  const major = new RegExp(`^(${MAJOR_ROADS})$`);
+  return (json.elements ?? [])
+    .filter((el) => el.type === 'way' && (el.geometry?.length ?? 0) >= 2 && el.tags?.highway)
+    .map((el) => ({ id: `way/${el.id}`, major: major.test(el.tags!.highway), points: el.geometry! }));
+}
+
+export async function fetchRoads(center: LatLon, radiusMeters: number, signal?: AbortSignal): Promise<Road[]> {
+  const response = await fetch(OVERPASS_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: `data=${encodeURIComponent(buildRoadsQuery(center, radiusMeters))}`,
+    signal,
+  });
+  if (!response.ok) throw new Error(`Overpass ${response.status}`);
+  return parseRoads(await response.json());
+}

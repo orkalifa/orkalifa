@@ -8,6 +8,7 @@ import { useHeading } from '../hooks/useHeading';
 import { useHorizons } from '../hooks/useHorizons';
 import { useLocation } from '../hooks/useLocation';
 import { useNow } from '../hooks/useNow';
+import { useRoads } from '../hooks/useRoads';
 import { useSpots } from '../hooks/useSpots';
 import { rankSpots } from '../lib/score';
 import { angleBetween, bearingToHebrew, formatClock, formatCountdown, getSunsetInfo } from '../lib/sun';
@@ -21,6 +22,7 @@ export default function SunsetScreen() {
   const heading = useHeading(Platform.OS !== 'web');
   const coords = state.status === 'loading' ? null : state.coords;
   const spots = useSpots(coords);
+  const roads = useRoads(coords);
   const info = coords ? getSunsetInfo(coords.latitude, coords.longitude, now) : null;
   const horizons = useHorizons(spots.state.status === 'ready' ? spots.state.spots : null, coords, info?.bearing ?? null);
   const [balance, setBalance] = useState<BalanceKey>('balanced');
@@ -113,7 +115,7 @@ export default function SunsetScreen() {
           )}
           {ranked && (
             <>
-              <SpotMap from={{ lat: latitude, lon: longitude }} sunsetBearing={info.bearing} spots={ranked} />
+              <SpotMap from={{ lat: latitude, lon: longitude }} sunsetBearing={info.bearing} spots={ranked} roads={roads} />
               <SpotList spots={ranked} />
             </>
           )}
