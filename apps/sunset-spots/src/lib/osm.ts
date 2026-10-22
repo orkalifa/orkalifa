@@ -12,7 +12,45 @@ export type Candidate = LatLon & {
 /** A candidate after merging, with the other spot types found at the same place. */
 export type Spot = Candidate & { nearby: SpotKind[] };
 
-const OVERPASS_URL = 'https://overpass-api.de/api/interpreter';
+// The main server often answers 429/504 when busy, so fall back to public mirrors.
+export const OVERPASS_URLS = [
+  'https://overpass-api.de/api/interpreter',
+  'https://overpass.private.coffee/api/interpreter',
+  'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
+];
+const OVERPASS_TIMEOUT_MS = 20000;
+
+/**
+ * Runs an Overpass query, trying each server in turn (starting at `first`) until one answers.
+ * Throws if all of them fail or `signal` aborts.
+ */
+export async function overpass<T>(query: string, signal?: AbortSignal, first = 0): Promise<T> {
+  let lastError: unknown = new Error('Overpass: no servers');
+  for (let i = 0; i < OVERPASS_URLS.length; i++) {
+    if (signal?.aborted) break;
+    const url = OVERPASS_URLS[(first + i) % OVERPASS_URLS.length];
+    const attempt = new AbortController();
+    const onAbort = () => attempt.abort();
+    signal?.addEventListener('abort', onAbort);
+    const timer = setTimeout(onAbort, OVERPASS_TIMEOUT_MS);
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: `data=${encodeURIComponent(query)}`,
+        signal: attempt.signal,
+      });
+      if (!response.ok) throw new Error(`Overpass ${response.status}`);
+      return (await response.json()) as T;
+    } catch (error) {
+      lastError = error;
+    } finally {
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', onAbort);
+    }
+  }
+  throw signal?.aborted ? new Error('Overpass: aborted') : lastError;
+}
 
 const FILTERS: [string, string][] = [
   ['tourism', 'viewpoint'],
@@ -86,14 +124,7 @@ export function mergeNearby(candidates: Candidate[], radiusMeters = 40): Spot[] 
 }
 
 export async function fetchCandidates(center: LatLon, radiusMeters: number, signal?: AbortSignal): Promise<Candidate[]> {
-  const response = await fetch(OVERPASS_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: `data=${encodeURIComponent(buildOverpassQuery(center, radiusMeters))}`,
-    signal,
-  });
-  if (!response.ok) throw new Error(`Overpass ${response.status}`);
-  return parseOverpass(await response.json());
+  return parseOverpass(await overpass(buildOverpassQuery(center, radiusMeters), signal));
 }
 
 export type Road = { id: string; major: boolean; points: LatLon[] };
@@ -121,13 +152,7 @@ export function parseRoads(json: { elements?: OverpassWay[] }): Road[] {
     .map((el) => ({ id: `way/${el.id}`, major: major.test(el.tags!.highway), points: el.geometry! }));
 }
 
+/** Starts at the second server so it doesn't compete with the spots query for the same rate limit. */
 export async function fetchRoads(center: LatLon, radiusMeters: number, signal?: AbortSignal): Promise<Road[]> {
-  const response = await fetch(OVERPASS_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: `data=${encodeURIComponent(buildRoadsQuery(center, radiusMeters))}`,
-    signal,
-  });
-  if (!response.ok) throw new Error(`Overpass ${response.status}`);
-  return parseRoads(await response.json());
+  return parseRoads(await overpass(buildRoadsQuery(center, radiusMeters), signal, 1));
 }

@@ -8,6 +8,7 @@ import { useHeading } from '../hooks/useHeading';
 import { useHorizons } from '../hooks/useHorizons';
 import { useLocation } from '../hooks/useLocation';
 import { useNow } from '../hooks/useNow';
+import { usePlaceName } from '../hooks/usePlaceName';
 import { useRoads } from '../hooks/useRoads';
 import { useSpots } from '../hooks/useSpots';
 import { rankSpots } from '../lib/score';
@@ -23,6 +24,7 @@ export default function SunsetScreen() {
   const coords = state.status === 'loading' ? null : state.coords;
   const spots = useSpots(coords);
   const roads = useRoads(coords);
+  const place = usePlaceName(state.status === 'ready' ? state.coords : null);
   const info = coords ? getSunsetInfo(coords.latitude, coords.longitude, now) : null;
   const horizons = useHorizons(spots.state.status === 'ready' ? spots.state.spots : null, coords, info?.bearing ?? null);
   const [balance, setBalance] = useState<BalanceKey>('balanced');
@@ -62,7 +64,10 @@ export default function SunsetScreen() {
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.card}>
           <View style={styles.cardColumn}>
-            <Text style={styles.label}>{info.isTomorrow ? 'השקיעה מחר' : 'השקיעה היום'}</Text>
+            <Text style={styles.label}>
+              {info.isTomorrow ? 'השקיעה מחר' : 'השקיעה היום'}
+              {place && ` · ${place}`}
+            </Text>
             <Text style={styles.time}>{formatClock(info.sunset)}</Text>
           </View>
           <View style={[styles.cardColumn, styles.alignStart]}>
@@ -104,6 +109,7 @@ export default function SunsetScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>מקומות לשקיעה סביבך</Text>
           <BalancePicker value={balance} onChange={setBalance} />
+          <SpotMap from={{ lat: latitude, lon: longitude }} sunsetBearing={info.bearing} spots={ranked ?? []} roads={roads} />
           {spots.state.status === 'loading' && <Text style={styles.muted}>מחפש מקומות…</Text>}
           {spots.state.status === 'error' && (
             <View style={styles.notice}>
@@ -113,12 +119,7 @@ export default function SunsetScreen() {
               </Pressable>
             </View>
           )}
-          {ranked && (
-            <>
-              <SpotMap from={{ lat: latitude, lon: longitude }} sunsetBearing={info.bearing} spots={ranked} roads={roads} />
-              <SpotList spots={ranked} />
-            </>
-          )}
+          {ranked && <SpotList spots={ranked} />}
           {spots.state.status === 'ready' && horizons.status === 'idle' && (
             <Text style={styles.soon}>בודק את קו האופק לכיוון השקיעה…</Text>
           )}

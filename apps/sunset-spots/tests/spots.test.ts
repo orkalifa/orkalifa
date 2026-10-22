@@ -105,3 +105,27 @@ test('roads query: main roads far, small streets near', async () => {
   });
   assert.deepEqual(roads.map((r) => [r.id, r.major]), [['way/1', true], ['way/2', false]]);
 });
+
+test('overpass falls back to the next server when one is busy', async () => {
+  const { overpass, OVERPASS_URLS } = await import('../src/lib/osm.ts');
+  const realFetch = globalThis.fetch;
+  const calls: string[] = [];
+  globalThis.fetch = (async (url: string) => {
+    calls.push(url);
+    if (calls.length === 1) return new Response('busy', { status: 429 });
+    return new Response(JSON.stringify({ elements: [] }), { status: 200 });
+  }) as typeof fetch;
+  try {
+    assert.deepEqual(await overpass('q', undefined, 1), { elements: [] });
+    assert.deepEqual(calls, [OVERPASS_URLS[1], OVERPASS_URLS[2]]);
+    calls.length = 0;
+    globalThis.fetch = (async (url: string) => {
+      calls.push(url);
+      throw new Error('offline');
+    }) as typeof fetch;
+    await assert.rejects(overpass('q'), /offline/);
+    assert.equal(calls.length, OVERPASS_URLS.length);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});
