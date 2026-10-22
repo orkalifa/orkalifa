@@ -31,7 +31,8 @@
         {
           "locationWhenInUsePermission": "האפליקציה משתמשת במיקום שלך כדי לחשב את כיוון ושעת השקיעה ולמצוא מקומות קרובים."
         }
-      ]
+      ],
+      "expo-status-bar"
     ],
     "scheme": "sunsetspots"
   }
