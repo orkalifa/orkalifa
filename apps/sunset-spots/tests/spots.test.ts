@@ -89,21 +89,38 @@ test('a blocked horizon pulls a spot down, an open one lifts it', () => {
 });
 
 
-test('roads query: main roads far, small streets near', async () => {
-  const { buildRoadsQuery, parseRoads } = await import('../src/lib/osm.ts');
-  const q = buildRoadsQuery(HOME, 10000);
+test('map query: main roads far, small streets near, land use and place names', async () => {
+  const { buildMapQuery, parseMapLayers } = await import('../src/lib/osm.ts');
+  const q = buildMapQuery(HOME, 10000);
   assert.match(q, /way\(around:10000,32\.08,34\.78\)\["highway"~"\^\(motorway\|trunk\|primary\|secondary\|tertiary\)\$"\]/);
-  assert.match(q, /way\(around:3000,/);
+  assert.match(q, /way\(around:3000,32\.08,34\.78\)\["highway"/);
+  assert.match(q, /way\(around:8000,32\.08,34\.78\)\["landuse"~"\^\(farmland/);
+  assert.match(q, /node\(around:13000,32\.08,34\.78\)\["place"/);
   assert.match(q, /out geom;$/);
-  const roads = parseRoads({
+
+  const square = [
+    { lat: 32, lon: 34.7 },
+    { lat: 32.01, lon: 34.7 },
+    { lat: 32.01, lon: 34.71 },
+    { lat: 32, lon: 34.7 },
+  ];
+  const layers = parseMapLayers({
     elements: [
       { type: 'way', id: 1, tags: { highway: 'primary' }, geometry: [{ lat: 32, lon: 34.7 }, { lat: 32.1, lon: 34.8 }] },
       { type: 'way', id: 2, tags: { highway: 'residential' }, geometry: [{ lat: 32, lon: 34.7 }, { lat: 32.01, lon: 34.71 }] },
       { type: 'way', id: 3, tags: { highway: 'primary' }, geometry: [{ lat: 32, lon: 34.7 }] },
-      { type: 'node', id: 4 },
+      { type: 'way', id: 4, tags: { landuse: 'farmland' }, geometry: square },
+      { type: 'way', id: 5, tags: { landuse: 'orchard' }, geometry: square },
+      { type: 'way', id: 6, tags: { landuse: 'residential' }, geometry: square },
+      { type: 'way', id: 7, tags: { landuse: 'industrial' }, geometry: square },
+      { type: 'node', id: 8, lat: 32.02, lon: 34.72, tags: { place: 'village', name: 'Moshav', 'name:he': 'מושב' } },
+      { type: 'node', id: 9, lat: 32.02, lon: 34.72, tags: { place: 'locality', name: 'Junction' } },
+      { type: 'node', id: 10 },
     ],
   });
-  assert.deepEqual(roads.map((r) => [r.id, r.major]), [['way/1', true], ['way/2', false]]);
+  assert.deepEqual(layers.roads.map((r) => [r.id, r.major]), [['way/1', true], ['way/2', false]]);
+  assert.deepEqual(layers.areas.map((a) => [a.id, a.kind]), [['way/4', 'field'], ['way/5', 'green'], ['way/6', 'town']]);
+  assert.deepEqual(layers.places.map((p) => [p.name, p.rank]), [['מושב', 2]]);
 });
 
 test('overpass falls back to the next server when one is busy', async () => {

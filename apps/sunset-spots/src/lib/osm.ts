@@ -128,31 +128,84 @@ export async function fetchCandidates(center: LatLon, radiusMeters: number, sign
 }
 
 export type Road = { id: string; major: boolean; points: LatLon[] };
+export type AreaKind = 'field' | 'green' | 'water' | 'town';
+export type Area = { id: string; kind: AreaKind; points: LatLon[] };
+/** `rank`: 0 city, 1 town, 2 village (moshav, kibbutz), 3 hamlet. */
+export type Place = LatLon & { id: string; name: string; rank: number };
+export type MapLayers = { roads: Road[]; areas: Area[]; places: Place[] };
 
 const MAJOR_ROADS = 'motorway|trunk|primary|secondary|tertiary';
 const MINOR_ROADS = 'unclassified|residential|living_street';
+const PLACE_RANK: Record<string, number> = { city: 0, town: 1, village: 2, hamlet: 3 };
+// Land use only out to here: farmland edges have many points, and past this the map is mostly roads anyway.
+const AREAS_MAX_RADIUS_M = 8000;
 
-/** Main roads out to `radiusMeters`, small streets only close by (a city has thousands of them). */
-export function buildRoadsQuery(center: LatLon, radiusMeters: number): string {
+/**
+ * Everything the map draws besides the spots, in one request: main roads out to `radiusMeters`,
+ * small streets close by (a city has thousands), fields, green areas, water, built-up areas
+ * and settlement names.
+ */
+export function buildMapQuery(center: LatLon, radiusMeters: number): string {
   const at = (r: number) => `(around:${Math.round(r)},${center.lat},${center.lon})`;
+  const areas = at(Math.min(radiusMeters, AREAS_MAX_RADIUS_M));
   return (
-    `[out:json][timeout:25];(` +
+    `[out:json][timeout:30];(` +
     `way${at(radiusMeters)}["highway"~"^(${MAJOR_ROADS})$"];` +
     `way${at(Math.min(radiusMeters, 3000))}["highway"~"^(${MINOR_ROADS})$"];` +
+    `way${areas}["landuse"~"^(farmland|meadow|orchard|vineyard|forest|grass|residential)$"];` +
+    `way${areas}["natural"~"^(wood|scrub|water)$"];` +
+    `way${areas}["leisure"="park"];` +
+    `node${at(radiusMeters * 1.3)}["place"~"^(city|town|village|hamlet)$"]["name"];` +
     `);out geom;`
   );
 }
 
-type OverpassWay = { type: string; id: number; tags?: Record<string, string>; geometry?: LatLon[] };
+function areaKind(tags: Record<string, string>): AreaKind | null {
+  const { landuse, natural, leisure } = tags;
+  if (landuse === 'farmland' || landuse === 'meadow') return 'field';
+  if (landuse === 'residential') return 'town';
+  if (natural === 'water') return 'water';
+  if (['orchard', 'vineyard', 'forest', 'grass'].includes(landuse) || ['wood', 'scrub'].includes(natural) || leisure === 'park') {
+    return 'green';
+  }
+  return null;
+}
 
-export function parseRoads(json: { elements?: OverpassWay[] }): Road[] {
+type OverpassMapElement = {
+  type: string;
+  id: number;
+  lat?: number;
+  lon?: number;
+  tags?: Record<string, string>;
+  geometry?: LatLon[];
+};
+
+export function parseMapLayers(json: { elements?: OverpassMapElement[] }): MapLayers {
   const major = new RegExp(`^(${MAJOR_ROADS})$`);
-  return (json.elements ?? [])
-    .filter((el) => el.type === 'way' && (el.geometry?.length ?? 0) >= 2 && el.tags?.highway)
-    .map((el) => ({ id: `way/${el.id}`, major: major.test(el.tags!.highway), points: el.geometry! }));
+  const layers: MapLayers = { roads: [], areas: [], places: [] };
+  for (const el of json.elements ?? []) {
+    const tags = el.tags ?? {};
+    if (el.type === 'node') {
+      const rank = PLACE_RANK[tags.place];
+      const name = tags['name:he'] ?? tags.name;
+      if (rank !== undefined && name && el.lat !== undefined && el.lon !== undefined) {
+        layers.places.push({ id: `node/${el.id}`, name, rank, lat: el.lat, lon: el.lon });
+      }
+      continue;
+    }
+    if (el.type !== 'way' || (el.geometry?.length ?? 0) < 2) continue;
+    const id = `way/${el.id}`;
+    if (tags.highway) {
+      layers.roads.push({ id, major: major.test(tags.highway), points: el.geometry! });
+      continue;
+    }
+    const kind = areaKind(tags);
+    if (kind && el.geometry!.length >= 3) layers.areas.push({ id, kind, points: el.geometry! });
+  }
+  return layers;
 }
 
 /** Starts at the second server so it doesn't compete with the spots query for the same rate limit. */
-export async function fetchRoads(center: LatLon, radiusMeters: number, signal?: AbortSignal): Promise<Road[]> {
-  return parseRoads(await overpass(buildRoadsQuery(center, radiusMeters), signal, 1));
+export async function fetchMapLayers(center: LatLon, radiusMeters: number, signal?: AbortSignal): Promise<MapLayers> {
+  return parseMapLayers(await overpass(buildMapQuery(center, radiusMeters), signal, 1));
 }
