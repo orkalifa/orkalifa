@@ -26,7 +26,7 @@ export default function SunsetScreen() {
   const { height: windowHeight } = useWindowDimensions();
   const coords = state.status === 'loading' ? null : state.coords;
   const spots = useSpots(coords);
-  const layers = useMapLayers(coords);
+  const map = useMapLayers(coords);
   const place = usePlaceName(state.status === 'ready' ? state.coords : null);
   const info = coords ? getSunsetInfo(coords.latitude, coords.longitude, now) : null;
   const horizons = useHorizons(spots.state.status === 'ready' ? spots.state.spots : null, coords, info?.bearing ?? null);
@@ -69,7 +69,7 @@ export default function SunsetScreen() {
             from={{ lat: latitude, lon: longitude }}
             sunsetBearing={info.bearing}
             spots={ranked ?? []}
-            layers={layers}
+            layers={map.layers}
             height={Math.round(windowHeight * MAP_SHARE)}
             top={insets.top + CARD_SPACE}
           />
@@ -99,6 +99,18 @@ export default function SunsetScreen() {
             <Fact label="שעת הזהב מתחילה" value={formatClock(info.goldenHour)} />
           </View>
 
+          {map.error && spots.state.status !== 'error' && (
+            <View style={styles.notice}>
+              <Text style={styles.noticeText}>המפה (כבישים, שדות ויישובים) לא נטענה.</Text>
+              <Text style={styles.errorDetail} selectable>
+                {map.error}
+              </Text>
+              <Pressable onPress={map.retry} style={styles.button} accessibilityRole="button">
+                <Text style={styles.buttonText}>לנסות שוב</Text>
+              </Pressable>
+            </View>
+          )}
+
           {state.status === 'fallback' && (
             <View style={styles.notice}>
               <Text style={styles.noticeText}>
@@ -119,7 +131,17 @@ export default function SunsetScreen() {
             {spots.state.status === 'error' && (
               <View style={styles.notice}>
                 <Text style={styles.noticeText}>לא הצלחנו לטעון מקומות מהמפה.</Text>
-                <Pressable onPress={spots.retry} style={styles.button} accessibilityRole="button">
+                <Text style={styles.errorDetail} selectable>
+                  {spots.state.message}
+                </Text>
+                <Pressable
+                  onPress={() => {
+                    spots.retry();
+                    map.retry();
+                  }}
+                  style={styles.button}
+                  accessibilityRole="button"
+                >
                   <Text style={styles.buttonText}>לנסות שוב</Text>
                 </Pressable>
               </View>
@@ -146,7 +168,9 @@ function Fact({ label, value, detail }: { label: string; value: string; detail?:
   return (
     <View style={styles.fact}>
       <Text style={styles.label}>{label}</Text>
-      <Text style={styles.factValue}>{value}</Text>
+      <Text style={styles.factValue} numberOfLines={1} adjustsFontSizeToFit>
+        {value}
+      </Text>
       {detail && <Text style={styles.label}>{detail}</Text>}
     </View>
   );
@@ -184,6 +208,8 @@ const styles = StyleSheet.create({
   factValue: { fontFamily: fonts.semibold, fontSize: 16, color: colors.ink, textAlign: 'right' },
   notice: { padding: 14, backgroundColor: colors.sand, borderRadius: 18, gap: 10, alignItems: 'flex-end' },
   noticeText: { fontFamily: fonts.regular, fontSize: 14, color: colors.inkSoft, textAlign: 'right' },
+  // Technical reason in English (server and HTTP status), so a screenshot tells us what failed.
+  errorDetail: { fontFamily: fonts.regular, fontSize: 11, color: colors.muted, textAlign: 'left', alignSelf: 'stretch' },
   button: { minHeight: 44, paddingHorizontal: 18, justifyContent: 'center', backgroundColor: colors.ink, borderRadius: 14 },
   buttonText: { fontFamily: fonts.semibold, fontSize: 15, color: colors.ground },
   muted: { fontFamily: fonts.regular, fontSize: 15, color: colors.muted, textAlign: 'center' },

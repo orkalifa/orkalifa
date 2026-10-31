@@ -5,7 +5,7 @@ import { fetchCandidates, mergeNearby, type Spot } from '../lib/osm';
 export type SpotsState =
   | { status: 'loading' }
   | { status: 'ready'; spots: Spot[] }
-  | { status: 'error' };
+  | { status: 'error'; message: string };
 
 const RADIUS_METERS = 10000;
 
@@ -21,8 +21,8 @@ export function useSpots(coords: Coords | null) {
     const controller = new AbortController();
     fetchCandidates({ lat, lon }, RADIUS_METERS, controller.signal)
       .then((candidates) => setState({ status: 'ready', spots: mergeNearby(candidates) }))
-      .catch(() => {
-        if (!controller.signal.aborted) setState({ status: 'error' });
+      .catch((error: unknown) => {
+        if (!controller.signal.aborted) setState({ status: 'error', message: error instanceof Error ? error.message : String(error) });
       });
     return () => controller.abort();
   }, [lat, lon, attempt]);

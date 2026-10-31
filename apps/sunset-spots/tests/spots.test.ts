@@ -127,9 +127,10 @@ test('overpass falls back to the next server when one is busy', async () => {
   const { overpass, OVERPASS_URLS } = await import('../src/lib/osm.ts');
   const realFetch = globalThis.fetch;
   const calls: string[] = [];
-  globalThis.fetch = (async (url: string) => {
+  globalThis.fetch = (async (url: string, init?: RequestInit) => {
     calls.push(url);
     if (calls.length === 1) return new Response('busy', { status: 429 });
+    assert.equal(new Headers(init?.headers).get('User-Agent'), 'Spotlight/1.0 (sunset spots app)');
     return new Response(JSON.stringify({ elements: [] }), { status: 200 });
   }) as typeof fetch;
   try {
@@ -140,7 +141,7 @@ test('overpass falls back to the next server when one is busy', async () => {
       calls.push(url);
       throw new Error('offline');
     }) as typeof fetch;
-    await assert.rejects(overpass('q'), /offline/);
+    await assert.rejects(overpass('q'), /overpass-api\.de: offline · overpass\.private\.coffee: offline/);
     assert.equal(calls.length, OVERPASS_URLS.length);
   } finally {
     globalThis.fetch = realFetch;

@@ -17,39 +17,49 @@ export const OVERPASS_URLS = [
   'https://overpass-api.de/api/interpreter',
   'https://overpass.private.coffee/api/interpreter',
   'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
+  'https://overpass.kumi.systems/api/interpreter',
 ];
 const OVERPASS_TIMEOUT_MS = 20000;
+// Overpass asks apps to identify themselves; some servers turn away anonymous clients.
+const USER_AGENT = 'Spotlight/1.0 (sunset spots app)';
 
 /**
  * Runs an Overpass query, trying each server in turn (starting at `first`) until one answers.
- * Throws if all of them fail or `signal` aborts.
+ * If all of them fail, the error says why for each server ("overpass-api.de: HTTP 429 · …"),
+ * so the app can show it.
  */
 export async function overpass<T>(query: string, signal?: AbortSignal, first = 0): Promise<T> {
-  let lastError: unknown = new Error('Overpass: no servers');
+  const failures: string[] = [];
   for (let i = 0; i < OVERPASS_URLS.length; i++) {
     if (signal?.aborted) break;
     const url = OVERPASS_URLS[(first + i) % OVERPASS_URLS.length];
     const attempt = new AbortController();
     const onAbort = () => attempt.abort();
+    let timedOut = false;
     signal?.addEventListener('abort', onAbort);
-    const timer = setTimeout(onAbort, OVERPASS_TIMEOUT_MS);
+    const timer = setTimeout(() => {
+      timedOut = true;
+      attempt.abort();
+    }, OVERPASS_TIMEOUT_MS);
     try {
       const response = await fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': USER_AGENT },
         body: `data=${encodeURIComponent(query)}`,
         signal: attempt.signal,
       });
-      if (!response.ok) throw new Error(`Overpass ${response.status}`);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
       return (await response.json()) as T;
     } catch (error) {
-      lastError = error;
+      const reason = timedOut ? 'timeout' : error instanceof Error ? error.message : String(error);
+      // A regex, not `new URL()`: React Native's URL doesn't implement `hostname`.
+      failures.push(`${url.replace(/^https?:\/\/([^/]+).*$/, '$1')}: ${reason}`);
     } finally {
       clearTimeout(timer);
       signal?.removeEventListener('abort', onAbort);
     }
   }
-  throw signal?.aborted ? new Error('Overpass: aborted') : lastError;
+  throw new Error(signal?.aborted ? 'aborted' : failures.join(' · ') || 'no servers');
 }
 
 const FILTERS: [string, string][] = [
