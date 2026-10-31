@@ -13,10 +13,11 @@
   npm install
   npx expo start -c
   ```
+  - **אם `npx` נותן `unknown option: -n` או `>>`** (קורה במחשב הנייד), להריץ במקומו `npx.cmd expo start -c`.
   - **אפשרות קצרה יותר:** לחיצה כפולה על `apps\sunset-spots\start.bat`.
   - **פעם ראשונה במחשב חדש:**
     1. `git clone https://github.com/orkalifa/orkalifa.git`
     2. `git checkout claude/claude-improvement-ideas-2rof6t`
     3. אם npm חסום ("running scripts is disabled"), להריץ `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`.
-  - **בטלפון:** Expo Go, באותה רשת Wi‑Fi כמו המחשב. אם החיבור לא מצליח, להריץ `npx expo start --tunnel`.
+  - **בטלפון:** Expo Go, באותה רשת Wi‑Fi כמו המחשב. אם החיבור לא מצליח או מופיע "Something went wrong", להריץ `npx.cmd expo start --tunnel -c`.
   - **לא לעדכן ל־SDK 58** עד ש־Expo Go ב־Play Store יתמוך בגרסה הזו.
