@@ -2,6 +2,7 @@ import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { formatDistance } from '../lib/geo';
 import type { SpotKind } from '../lib/osm';
 import type { ScoredSpot } from '../lib/score';
+import type { ShownSpot } from '../lib/travel';
 import { SpotPin } from './SpotPin';
 import { colors, fonts } from '../theme';
 
@@ -17,7 +18,7 @@ function openWaze(spot: ScoredSpot) {
   Linking.openURL(`https://waze.com/ul?ll=${spot.lat},${spot.lon}&navigate=yes`);
 }
 
-export function SpotList({ spots }: { spots: ScoredSpot[] }) {
+export function SpotList({ spots }: { spots: ShownSpot[] }) {
   if (spots.length === 0) {
     return <Text style={styles.empty}>{'לא נמצאו מקומות מסומנים בטווח של 10 ק"מ.'}</Text>;
   }
@@ -25,7 +26,7 @@ export function SpotList({ spots }: { spots: ScoredSpot[] }) {
     <View style={styles.list}>
       {spots.map((spot, i) => (
         <View key={spot.id} style={[styles.row, i === 0 && styles.rowTop]}>
-          <SpotPin kind={spot.kind} highlight={i === 0} size={28} />
+          <SpotPin kind={spot.kind} color={spot.reach.color} opacity={spot.reach.opacity} size={28} />
           <View style={styles.body}>
             <Text style={styles.name} numberOfLines={1}>
               {spot.name ?? KIND_LABEL[spot.kind]}

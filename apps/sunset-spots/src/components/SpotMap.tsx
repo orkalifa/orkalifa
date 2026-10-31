@@ -4,7 +4,7 @@ import Svg, { Circle, Defs, Ellipse, G, Line, Path, Pattern, RadialGradient, Rec
 import type { LatLon } from '../lib/geo';
 import { edgePoint, layoutLabels, makeProjection, mapRange, shapePath, type Projection } from '../lib/mapview';
 import type { AreaKind, MapLayers } from '../lib/osm';
-import type { ScoredSpot } from '../lib/score';
+import type { ShownSpot } from '../lib/travel';
 import { colors, fonts } from '../theme';
 import { ICON_PATHS, PIN_PATH } from './SpotPin';
 
@@ -28,7 +28,7 @@ const AREA_ORDER: AreaKind[] = ['field', 'green', 'water', 'town'];
 type Props = {
   from: LatLon;
   sunsetBearing: number;
-  spots: ScoredSpot[];
+  spots: ShownSpot[];
   layers: MapLayers;
   height: number;
   /** Height covered by the card floating over the top of the map. */
@@ -135,9 +135,9 @@ const BaseLayers = memo(function BaseLayers({
         </G>
       ))}
       <G>
-        {/* Bottom right: the compass button sits bottom left. */}
-        <Rect x={width - 14 - shapes.scale.px} y={height - 30} width={shapes.scale.px} height={5} rx={2.5} fill={colors.white} stroke={MAP.label} strokeWidth={1} />
-        <SvgText x={width - 14} y={height - 36} fontSize={11} fontFamily={fonts.medium} fill={MAP.label} textAnchor="end">
+        {/* Top right, under the sunset card: the compass and travel-mode buttons take the bottom. */}
+        <Rect x={width - 14 - shapes.scale.px} y={top + 22} width={shapes.scale.px} height={5} rx={2.5} fill={colors.white} stroke={MAP.label} strokeWidth={1} />
+        <SvgText x={width - 14} y={top + 16} fontSize={11} fontFamily={fonts.medium} fill={MAP.label} textAnchor="end">
           {shapes.scale.label}
         </SvgText>
       </G>
@@ -146,7 +146,7 @@ const BaseLayers = memo(function BaseLayers({
 });
 
 /** Sunset beam, the sun at the map's edge, the spot pins and you. Cheap, redrawn as the spots re-rank. */
-function Overlay({ proj, sunsetBearing, spots }: { proj: Projection; sunsetBearing: number; spots: ScoredSpot[] }) {
+function Overlay({ proj, sunsetBearing, spots }: { proj: Projection; sunsetBearing: number; spots: ShownSpot[] }) {
   const { center } = proj;
   const far = Math.hypot(proj.width, proj.height);
   const ray = (bearing: number) => {
@@ -177,10 +177,10 @@ function Overlay({ proj, sunsetBearing, spots }: { proj: Projection; sunsetBeari
         const w = rank === 0 ? 38 : 28;
         const h = w * 1.25;
         return (
-          <G key={spot.id}>
+          <G key={spot.id} opacity={spot.reach.opacity}>
             <Ellipse cx={p.x} cy={p.y} rx={9} ry={3.5} fill={colors.ink} opacity={0.18} />
             <G transform={`translate(${p.x - w / 2} ${p.y - h}) scale(${w / 40})`}>
-              <Path d={PIN_PATH} fill={rank === 0 ? colors.orange : '#EE9A62'} stroke={colors.white} strokeWidth={3} />
+              <Path d={PIN_PATH} fill={spot.reach.color} stroke={colors.white} strokeWidth={3} />
               <G transform="translate(10 9) scale(0.8333)">
                 <Path d={ICON_PATHS[spot.kind]} fill="none" stroke={colors.white} strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" />
               </G>
