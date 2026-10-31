@@ -20,4 +20,4 @@
     2. `git checkout claude/claude-improvement-ideas-2rof6t`
     3. אם npm חסום ("running scripts is disabled"), להריץ `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`.
   - **בטלפון:** Expo Go, באותה רשת Wi‑Fi כמו המחשב. אם החיבור לא מצליח או מופיע "Something went wrong", להריץ `npx.cmd expo start --tunnel -c`.
-  - **לא לעדכן ל־SDK 58** עד ש־Expo Go ב־Play Store יתמוך בגרסה הזו.
+  - **הפרויקט על Expo SDK 58.** זו הגרסה ש־Expo Go ב־Play Store תומך בה מאז 2026-10-31. אם Expo Go אומר שהגרסאות לא תואמות, צריך להתאים את הפרויקט לגרסה של Expo Go, ולא להפך.
