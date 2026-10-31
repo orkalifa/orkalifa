@@ -88,7 +88,7 @@ const BaseLayers = memo(function BaseLayers({
       .filter((r): r is { id: string; major: boolean; d: string } => r.d !== null)
       // Minor streets first so main roads sit on top at junctions.
       .sort((a, b) => Number(a.major) - Number(b.major));
-    return { areas, roads, labels: layoutLabels(layers.places, proj), scale: scaleBar(proj) };
+    return { areas, roads, labels: layoutLabels(layers.places, proj) };
   }, [lat, lon, width, height, top, range, layers]);
 
   const areaFill: Record<AreaKind, string> = {
@@ -134,13 +134,6 @@ const BaseLayers = memo(function BaseLayers({
           </SvgText>
         </G>
       ))}
-      <G>
-        {/* Top right, under the sunset card: the compass and travel-mode buttons take the bottom. */}
-        <Rect x={width - 14 - shapes.scale.px} y={top + 22} width={shapes.scale.px} height={5} rx={2.5} fill={colors.white} stroke={MAP.label} strokeWidth={1} />
-        <SvgText x={width - 14} y={top + 16} fontSize={11} fontFamily={fonts.medium} fill={MAP.label} textAnchor="end">
-          {shapes.scale.label}
-        </SvgText>
-      </G>
     </G>
   );
 });
@@ -202,15 +195,6 @@ function Overlay({ proj, sunsetBearing, spots }: { proj: Projection; sunsetBeari
       <Circle cx={center.x} cy={center.y} r={6} fill={colors.ink} />
     </G>
   );
-}
-
-const SCALE_STEPS_M = [100, 200, 500, 1000, 2000, 5000];
-
-/** The longest round distance that fits in about a quarter of the map's width. */
-function scaleBar(proj: Projection): { px: number; label: string } {
-  const max = proj.width * 0.28;
-  const meters = [...SCALE_STEPS_M].reverse().find((m) => m * proj.pxPerMeter <= max) ?? SCALE_STEPS_M[0];
-  return { px: meters * proj.pxPerMeter, label: meters < 1000 ? `${meters} מ'` : `${meters / 1000} ק"מ` };
 }
 
 const styles = StyleSheet.create({

@@ -4,14 +4,12 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { CompassButton, CompassSheet } from '../components/CompassSheet';
 import { SpotList } from '../components/SpotList';
 import { SpotMap } from '../components/SpotMap';
-import { TravelModePicker } from '../components/TravelModePicker';
 import { useHorizons } from '../hooks/useHorizons';
 import { useLocation } from '../hooks/useLocation';
 import { useMapLayers } from '../hooks/useMapLayers';
 import { useNow } from '../hooks/useNow';
 import { usePlaceName } from '../hooks/usePlaceName';
 import { useSpots } from '../hooks/useSpots';
-import { useTravelMode } from '../hooks/useTravelMode';
 import { rankSpots } from '../lib/score';
 import { bearingToHebrew, formatClock, formatCountdown, getSunsetInfo } from '../lib/sun';
 import { withReach } from '../lib/travel';
@@ -39,7 +37,6 @@ export default function SunsetScreen() {
   const info = coords ? getSunsetInfo(coords.latitude, coords.longitude, now) : null;
   const horizons = useHorizons(spots.state.status === 'ready' ? spots.state.spots : null, coords, info?.bearing ?? null);
   const [compassOpen, setCompassOpen] = useState(false);
-  const [travelMode, setTravelMode] = useTravelMode();
 
   if (state.status === 'loading') {
     return (
@@ -62,7 +59,7 @@ export default function SunsetScreen() {
     spots.state.status === 'ready'
       ? withReach(
           rankSpots(spots.state.spots, { lat: latitude, lon: longitude }, info.bearing, VIEW_WEIGHT, horizons.horizons).slice(0, 6),
-          travelMode,
+          'car',
           now,
           info.goldenHour,
           info.sunset,
@@ -98,9 +95,6 @@ export default function SunsetScreen() {
 
           <View style={styles.fab}>
             <CompassButton onPress={() => setCompassOpen(true)} />
-          </View>
-          <View style={styles.modes}>
-            <TravelModePicker value={travelMode} onChange={setTravelMode} />
           </View>
         </View>
 
@@ -210,7 +204,6 @@ const styles = StyleSheet.create({
   cardColumn: { alignItems: 'flex-end', gap: 2, flexShrink: 1 },
   alignStart: { alignItems: 'flex-start' },
   fab: { position: 'absolute', left: 12, bottom: 14 },
-  modes: { position: 'absolute', right: 12, bottom: 14 },
   label: { fontFamily: fonts.regular, fontSize: 13, color: colors.muted, textAlign: 'right' },
   time: { fontFamily: fonts.bold, fontSize: 30, color: colors.ink },
   countdown: { fontFamily: fonts.semibold, fontSize: 22, color: colors.orangeText },

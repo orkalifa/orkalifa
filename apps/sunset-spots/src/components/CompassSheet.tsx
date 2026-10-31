@@ -62,7 +62,7 @@ function CompassBody({ bearing, onClose }: { bearing: number; onClose: () => voi
 export function CompassButton({ onPress }: { onPress: () => void }) {
   return (
     <Pressable onPress={onPress} style={styles.fab} accessibilityRole="button" accessibilityLabel="פתיחת המצפן" hitSlop={8}>
-      <Svg width={30} height={30} viewBox="0 0 24 24">
+      <Svg width={22} height={22} viewBox="0 0 24 24">
         <Circle cx={12} cy={12} r={10} fill="none" stroke={colors.ink} strokeWidth={2} />
         <Path d="M12 5l3 7h-6z" fill={colors.orange} />
         <Path d="M12 19l-3-7h6z" fill={colors.inkSoft} />
@@ -81,12 +81,12 @@ const styles = StyleSheet.create({
   close: { minHeight: 48, paddingHorizontal: 28, justifyContent: 'center', backgroundColor: colors.ink, borderRadius: 16, marginTop: 8 },
   closeText: { fontFamily: fonts.semibold, fontSize: 16, color: colors.ground },
   fab: {
-    width: 56,
-    height: 56,
+    width: 42,
+    height: 42,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.surface,
-    borderRadius: 28,
+    borderRadius: 21,
     shadowColor: colors.orangeText,
     shadowOpacity: 0.18,
     shadowRadius: 10,

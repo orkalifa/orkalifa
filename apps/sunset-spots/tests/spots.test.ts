@@ -147,3 +147,48 @@ test('overpass falls back to the next server when one is busy', async () => {
     globalThis.fetch = realFetch;
   }
 });
+
+test('overpass asks the next server when one hangs, and cancels the slow one', async () => {
+  const { overpass, OVERPASS_URLS } = await import('../src/lib/osm.ts');
+  const realFetch = globalThis.fetch;
+  const calls: string[] = [];
+  let slowAborted = false;
+  globalThis.fetch = ((url: string, init?: RequestInit) => {
+    calls.push(url);
+    if (calls.length === 1) {
+      // A busy server: never answers, only stops when cancelled.
+      return new Promise((_, reject) => {
+        init?.signal?.addEventListener('abort', () => {
+          slowAborted = true;
+          reject(new Error('aborted'));
+        });
+      });
+    }
+    return Promise.resolve(new Response(JSON.stringify({ elements: ['fast'] }), { status: 200 }));
+  }) as typeof fetch;
+  try {
+    const started = Date.now();
+    const json = await overpass<{ elements: string[] }>('q', undefined, 0, { hedgeMs: 30, timeoutMs: 5000 });
+    assert.deepEqual(json.elements, ['fast']);
+    assert.ok(Date.now() - started < 1000, 'did not wait for the slow server to time out');
+    assert.deepEqual(calls, [OVERPASS_URLS[0], OVERPASS_URLS[1]]);
+    assert.equal(slowAborted, true);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});
+
+test('overpass reports a timeout per server when none answer', async () => {
+  const { overpass } = await import('../src/lib/osm.ts');
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = ((_url: string, init?: RequestInit) =>
+    new Promise((_, reject) => init?.signal?.addEventListener('abort', () => reject(new Error('aborted'))))) as typeof fetch;
+  try {
+    await assert.rejects(
+      overpass('q', undefined, 0, { hedgeMs: 10, timeoutMs: 60 }),
+      /^Error: overpass-api\.de: timeout · overpass\.private\.coffee: timeout · maps\.mail\.ru: timeout · overpass\.kumi\.systems: timeout$/,
+    );
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});

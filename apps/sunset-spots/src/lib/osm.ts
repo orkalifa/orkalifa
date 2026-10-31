@@ -19,47 +19,90 @@ export const OVERPASS_URLS = [
   'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
   'https://overpass.kumi.systems/api/interpreter',
 ];
-const OVERPASS_TIMEOUT_MS = 20000;
 // Overpass asks apps to identify themselves; some servers turn away anonymous clients.
 const USER_AGENT = 'Spotlight/1.0 (sunset spots app)';
 
+type OverpassOptions = {
+  /** Give up on a server after this long. */
+  timeoutMs?: number;
+  /** If no server has answered after this long, also ask the next one. */
+  hedgeMs?: number;
+};
+
+const host = (url: string) => url.replace(/^https?:\/\/([^/]+).*$/, '$1'); // React Native's URL has no `hostname`
+
 /**
- * Runs an Overpass query, trying each server in turn (starting at `first`) until one answers.
- * If all of them fail, the error says why for each server ("overpass-api.de: HTTP 429 · …"),
- * so the app can show it.
+ * Runs an Overpass query against the public servers, starting at `first`, and returns the first
+ * answer. A busy server can sit on a query for a long time, so rather than wait for it to time out
+ * before trying the next, the next one is also asked if nothing has come back after `hedgeMs`, and
+ * straight away when a server fails. The rest are cancelled once one answers.
+ * If all of them fail, the error says why for each ("overpass-api.de: HTTP 429 · …") so the app can show it.
  */
-export async function overpass<T>(query: string, signal?: AbortSignal, first = 0): Promise<T> {
-  const failures: string[] = [];
-  for (let i = 0; i < OVERPASS_URLS.length; i++) {
-    if (signal?.aborted) break;
-    const url = OVERPASS_URLS[(first + i) % OVERPASS_URLS.length];
-    const attempt = new AbortController();
-    const onAbort = () => attempt.abort();
-    let timedOut = false;
-    signal?.addEventListener('abort', onAbort);
-    const timer = setTimeout(() => {
-      timedOut = true;
-      attempt.abort();
-    }, OVERPASS_TIMEOUT_MS);
-    try {
-      const response = await fetch(url, {
+export function overpass<T>(
+  query: string,
+  signal?: AbortSignal,
+  first = 0,
+  { timeoutMs = 25000, hedgeMs = 6000 }: OverpassOptions = {},
+): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const failures: string[] = [];
+    const inFlight: AbortController[] = [];
+    let launched = 0;
+    let failed = 0;
+    let settled = false;
+    let hedgeTimer: ReturnType<typeof setTimeout> | undefined;
+
+    const settle = (done: () => void) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(hedgeTimer);
+      signal?.removeEventListener('abort', onAbort);
+      inFlight.forEach((c) => c.abort());
+      done();
+    };
+    const onAbort = () => settle(() => reject(new Error('aborted')));
+
+    const scheduleHedge = () => {
+      clearTimeout(hedgeTimer);
+      if (launched < OVERPASS_URLS.length) hedgeTimer = setTimeout(launchNext, hedgeMs);
+    };
+
+    function launchNext() {
+      if (settled || launched >= OVERPASS_URLS.length) return;
+      const url = OVERPASS_URLS[(first + launched++) % OVERPASS_URLS.length];
+      const controller = new AbortController();
+      inFlight.push(controller);
+      let timedOut = false;
+      const timer = setTimeout(() => {
+        timedOut = true;
+        controller.abort();
+      }, timeoutMs);
+      scheduleHedge();
+
+      fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': USER_AGENT },
         body: `data=${encodeURIComponent(query)}`,
-        signal: attempt.signal,
-      });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      return (await response.json()) as T;
-    } catch (error) {
-      const reason = timedOut ? 'timeout' : error instanceof Error ? error.message : String(error);
-      // A regex, not `new URL()`: React Native's URL doesn't implement `hostname`.
-      failures.push(`${url.replace(/^https?:\/\/([^/]+).*$/, '$1')}: ${reason}`);
-    } finally {
-      clearTimeout(timer);
-      signal?.removeEventListener('abort', onAbort);
+        signal: controller.signal,
+      })
+        .then(async (response) => {
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          return (await response.json()) as T;
+        })
+        .then((json) => settle(() => resolve(json)))
+        .catch((error: unknown) => {
+          if (settled) return;
+          failures.push(`${host(url)}: ${timedOut ? 'timeout' : error instanceof Error ? error.message : String(error)}`);
+          if (++failed === OVERPASS_URLS.length) settle(() => reject(new Error(failures.join(' · '))));
+          else launchNext();
+        })
+        .finally(() => clearTimeout(timer));
     }
-  }
-  throw new Error(signal?.aborted ? 'aborted' : failures.join(' · ') || 'no servers');
+
+    if (signal?.aborted) return onAbort();
+    signal?.addEventListener('abort', onAbort);
+    launchNext();
+  });
 }
 
 const FILTERS: [string, string][] = [

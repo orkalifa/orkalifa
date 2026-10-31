@@ -11,8 +11,6 @@ import type { ScoredSpot } from './score.ts';
 
 export type TravelMode = 'car' | 'bike' | 'walk';
 
-export const TRAVEL_MODES: TravelMode[] = ['car', 'bike', 'walk'];
-
 const PROFILE: Record<TravelMode, { kmh: number; detour: number; overheadMin: number }> = {
   // Rural roads and towns, not highways; a few minutes to get going and to park.
   car: { kmh: 45, detour: 1.35, overheadMin: 3 },
