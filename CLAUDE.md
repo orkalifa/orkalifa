@@ -19,5 +19,12 @@
     1. `git clone https://github.com/orkalifa/orkalifa.git`
     2. `git checkout claude/claude-improvement-ideas-2rof6t`
     3. אם npm חסום ("running scripts is disabled"), להריץ `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`.
-  - **בטלפון:** Expo Go, באותה רשת Wi‑Fi כמו המחשב. אם החיבור לא מצליח או מופיע "Something went wrong", להריץ `npx.cmd expo start --tunnel -c`.
+  - **בטלפון:** Expo Go, באותה רשת Wi‑Fi כמו המחשב.
+  - **אם החיבור לא מצליח או מופיע "Something went wrong":** להשתמש ב־tunnel. השילוב הזה עבד במחשב הנייד ב־2026-10-31, וב־SDK 58 צריך לכתוב `ngrok` במפורש:
+    ```
+    npm.cmd install --no-save @expo/ngrok@^4.1.0
+    npx.cmd expo start --tunnel ngrok -c
+    ```
+  - **אם Git מסרב למשוך** בגלל שינויים מקומיים בקבצי החבילות, להריץ קודם `git checkout -- package.json package-lock.json`.
+  - **בטלפון:** לסרוק את קוד ה־QR החדש, ולא להיכנס דרך "Recently opened", שיכול להתחבר לשרת ישן.
   - **הפרויקט על Expo SDK 58.** זו הגרסה ש־Expo Go ב־Play Store תומך בה מאז 2026-10-31. אם Expo Go אומר שהגרסאות לא תואמות, צריך להתאים את הפרויקט לגרסה של Expo Go, ולא להפך.
