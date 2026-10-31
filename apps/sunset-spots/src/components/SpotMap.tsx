@@ -112,10 +112,10 @@ const BaseLayers = memo(function BaseLayers({
         />
       ))}
       {shapes.roads.map((r) => (
-        <Path key={`${r.id}-c`} d={r.d} fill="none" stroke={MAP.roadEdge} strokeWidth={r.major ? 8 : 5} strokeLinecap="round" strokeLinejoin="round" />
+        <Path key={`${r.id}-c`} d={r.d} fill="none" stroke={MAP.roadEdge} strokeWidth={r.major ? 12 : 7.5} strokeLinecap="round" strokeLinejoin="round" />
       ))}
       {shapes.roads.map((r) => (
-        <Path key={r.id} d={r.d} fill="none" stroke={colors.white} strokeWidth={r.major ? 5 : 3} strokeLinecap="round" strokeLinejoin="round" />
+        <Path key={r.id} d={r.d} fill="none" stroke={colors.white} strokeWidth={r.major ? 8 : 4.5} strokeLinecap="round" strokeLinejoin="round" />
       ))}
       {shapes.labels.map((l) => (
         <G key={l.id}>
