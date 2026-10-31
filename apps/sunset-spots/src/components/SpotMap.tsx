@@ -1,6 +1,6 @@
 import { memo, useMemo, useState } from 'react';
 import { LayoutChangeEvent, StyleSheet, View } from 'react-native';
-import Svg, { Circle, Defs, Ellipse, G, Line, Path, Pattern, RadialGradient, Rect, Stop, Text as SvgText } from 'react-native-svg';
+import Svg, { Circle, Defs, Ellipse, G, Path, RadialGradient, Rect, Stop, Text as SvgText } from 'react-native-svg';
 import type { LatLon } from '../lib/geo';
 import { edgePoint, layoutLabels, makeProjection, mapRange, shapePath, type Projection } from '../lib/mapview';
 import type { AreaKind, MapLayers } from '../lib/osm';
@@ -13,9 +13,9 @@ const LABELLED = 3;
 // Warm, Waze-like ground colours, matching the mockup (ideas/mockups/sunset-app/).
 const MAP = {
   ground: '#FCEBD5',
-  field: '#F6D6AC',
-  fieldStripe: '#EFC797',
-  green: '#D9DCA6',
+  // Fields barely set off from the ground: there are so many that anything stronger turns into a grid of tiles.
+  field: '#F9E4C9',
+  green: '#E2E2B4',
   water: '#BFDCDD',
   town: '#F3CDAE',
   townEdge: '#EBAE80',
@@ -92,7 +92,7 @@ const BaseLayers = memo(function BaseLayers({
   }, [lat, lon, width, height, top, range, layers]);
 
   const areaFill: Record<AreaKind, string> = {
-    field: 'url(#fieldStripes)',
+    field: MAP.field,
     green: MAP.green,
     water: MAP.water,
     town: MAP.town,
@@ -100,12 +100,6 @@ const BaseLayers = memo(function BaseLayers({
 
   return (
     <G>
-      <Defs>
-        <Pattern id="fieldStripes" patternUnits="userSpaceOnUse" width={12} height={12} patternTransform="rotate(-18)">
-          <Rect x={0} y={0} width={12} height={12} fill={MAP.field} />
-          <Line x1={0} y1={6} x2={12} y2={6} stroke={MAP.fieldStripe} strokeWidth={2.5} />
-        </Pattern>
-      </Defs>
       <Rect x={0} y={0} width={width} height={height} fill={MAP.ground} />
       {shapes.areas.map((a) => (
         <Path
