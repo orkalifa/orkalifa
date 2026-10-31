@@ -1,4 +1,4 @@
-# שקיעה — אפליקציית מקומות שקיעה
+# Spotlight — אפליקציית מקומות שקיעה
 
 ה־Brief המלא: [`ideas/2026-10-18-sunset-spots-app.md`](../../ideas/2026-10-18-sunset-spots-app.md)
 
