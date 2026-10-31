@@ -1,12 +1,19 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import * as Location from 'expo-location';
 
 /**
- * Device compass heading in degrees from north, or null where there is no compass
- * (web, simulators). Uses true north when available, magnetic north otherwise.
+ * Calls `onHeading` with the device compass heading (degrees from north) on every sensor
+ * reading, without re-rendering. Uses true north when available, magnetic north otherwise.
+ * Nothing is called where there's no compass (web, simulators).
+ *
+ * On Android, expo-location reports only changes of 2° or more, at most every 50 ms, so callers
+ * should animate between readings rather than jump to them.
  */
-export function useHeading(enabled: boolean): number | null {
-  const [heading, setHeading] = useState<number | null>(null);
+export function useHeading(enabled: boolean, onHeading: (heading: number) => void): void {
+  const latest = useRef(onHeading);
+  useEffect(() => {
+    latest.current = onHeading;
+  });
 
   useEffect(() => {
     if (!enabled) return;
@@ -14,19 +21,17 @@ export function useHeading(enabled: boolean): number | null {
     let cancelled = false;
 
     Location.watchHeadingAsync(({ trueHeading, magHeading }) => {
-      setHeading(trueHeading >= 0 ? trueHeading : magHeading);
+      latest.current(trueHeading >= 0 ? trueHeading : magHeading);
     })
       .then((sub) => {
         if (cancelled) sub.remove();
         else subscription = sub;
       })
-      .catch(() => setHeading(null));
+      .catch(() => {});
 
     return () => {
       cancelled = true;
       subscription?.remove();
     };
   }, [enabled]);
-
-  return heading;
 }

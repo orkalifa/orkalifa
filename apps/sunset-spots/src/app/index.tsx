@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CompassButton, CompassSheet } from '../components/CompassSheet';
-import { BALANCE_OPTIONS, BalancePicker, SpotList, type BalanceKey } from '../components/SpotList';
+import { SpotList } from '../components/SpotList';
 import { SpotMap } from '../components/SpotMap';
 import { useHorizons } from '../hooks/useHorizons';
 import { useLocation } from '../hooks/useLocation';
@@ -16,6 +16,11 @@ import { colors, fonts } from '../theme';
 
 /** Share of the screen height the map takes; the list of spots scrolls up underneath. */
 const MAP_SHARE = 0.62;
+/**
+ * How much the view counts against comfort (access and seating) when ranking spots.
+ * One sensible mix instead of a setting: opening the app should be enough.
+ */
+const VIEW_WEIGHT = 0.4;
 /** Space the sunset card takes over the top of the map, below the status bar. */
 const CARD_SPACE = 100;
 
@@ -30,7 +35,6 @@ export default function SunsetScreen() {
   const place = usePlaceName(state.status === 'ready' ? state.coords : null);
   const info = coords ? getSunsetInfo(coords.latitude, coords.longitude, now) : null;
   const horizons = useHorizons(spots.state.status === 'ready' ? spots.state.spots : null, coords, info?.bearing ?? null);
-  const [balance, setBalance] = useState<BalanceKey>('balanced');
   const [compassOpen, setCompassOpen] = useState(false);
 
   if (state.status === 'loading') {
@@ -56,7 +60,7 @@ export default function SunsetScreen() {
           spots.state.spots,
           { lat: latitude, lon: longitude },
           info.bearing,
-          BALANCE_OPTIONS.find((o) => o.key === balance)!.weight,
+          VIEW_WEIGHT,
           horizons.horizons,
         ).slice(0, 6)
       : null;
@@ -95,7 +99,7 @@ export default function SunsetScreen() {
 
         <View style={styles.content}>
           <View style={styles.facts}>
-            <Fact label="כיוון השקיעה" value={bearingToHebrew(info.bearing)} detail={`${Math.round(info.bearing)}° מהצפון`} />
+            <Fact label="כיוון השקיעה" value={bearingToHebrew(info.bearing)} />
             <Fact label="שעת הזהב מתחילה" value={formatClock(info.goldenHour)} />
           </View>
 
@@ -126,7 +130,6 @@ export default function SunsetScreen() {
 
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>מקומות לשקיעה סביבך</Text>
-            <BalancePicker value={balance} onChange={setBalance} />
             {spots.state.status === 'loading' && <Text style={styles.muted}>מחפש מקומות…</Text>}
             {spots.state.status === 'error' && (
               <View style={styles.notice}>

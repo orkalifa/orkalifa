@@ -31,27 +31,12 @@ export function getSunsetInfo(lat: number, lon: number, now: Date = new Date()):
   return { sunset, goldenHour, bearing: normalizeBearing(azimuth), isTomorrow };
 }
 
-const DIRECTIONS = [
-  'צפון',
-  'צפון־צפון־מזרח',
-  'צפון־מזרח',
-  'מזרח־צפון־מזרח',
-  'מזרח',
-  'מזרח־דרום־מזרח',
-  'דרום־מזרח',
-  'דרום־דרום־מזרח',
-  'דרום',
-  'דרום־דרום־מערב',
-  'דרום־מערב',
-  'מערב־דרום־מערב',
-  'מערב',
-  'מערב־צפון־מערב',
-  'צפון־מערב',
-  'צפון־צפון־מערב',
-];
+// Eight points are plenty to know which way to face, and short enough to read at a glance.
+// Across Israel the sunset is always דרום־מערב, מערב or צפון־מערב.
+const DIRECTIONS = ['צפון', 'צפון־מזרח', 'מזרח', 'דרום־מזרח', 'דרום', 'דרום־מערב', 'מערב', 'צפון־מערב'];
 
 export function bearingToHebrew(bearing: number): string {
-  const index = Math.round(normalizeBearing(bearing) / 22.5) % 16;
+  const index = Math.round(normalizeBearing(bearing) / 45) % 8;
   return DIRECTIONS[index];
 }
 

@@ -13,37 +13,8 @@ const KIND_LABEL: Record<SpotKind, string> = {
   shelter: 'סככה',
 };
 
-export const BALANCE_OPTIONS = [
-  { key: 'comfort', label: 'נוחות', weight: 0.15 },
-  { key: 'balanced', label: 'מאוזן', weight: 0.4 },
-  { key: 'view', label: 'נוף', weight: 0.8 },
-] as const;
-
-export type BalanceKey = (typeof BALANCE_OPTIONS)[number]['key'];
-
 function openWaze(spot: ScoredSpot) {
   Linking.openURL(`https://waze.com/ul?ll=${spot.lat},${spot.lon}&navigate=yes`);
-}
-
-export function BalancePicker({ value, onChange }: { value: BalanceKey; onChange: (k: BalanceKey) => void }) {
-  return (
-    <View style={styles.segments} accessibilityRole="radiogroup" accessibilityLabel="מה חשוב לך הערב?">
-      {BALANCE_OPTIONS.map((o) => {
-        const selected = o.key === value;
-        return (
-          <Pressable
-            key={o.key}
-            onPress={() => onChange(o.key)}
-            accessibilityRole="radio"
-            accessibilityState={{ selected }}
-            style={[styles.segment, selected && styles.segmentSelected]}
-          >
-            <Text style={[styles.segmentText, selected && styles.segmentTextSelected]}>{o.label}</Text>
-          </Pressable>
-        );
-      })}
-    </View>
-  );
 }
 
 export function SpotList({ spots }: { spots: ScoredSpot[] }) {
@@ -76,11 +47,6 @@ export function SpotList({ spots }: { spots: ScoredSpot[] }) {
 }
 
 const styles = StyleSheet.create({
-  segments: { flexDirection: 'row-reverse', backgroundColor: colors.sand, borderRadius: 16, padding: 4, gap: 4 },
-  segment: { flex: 1, minHeight: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  segmentSelected: { backgroundColor: colors.ink },
-  segmentText: { fontFamily: fonts.medium, fontSize: 15, color: colors.inkSoft },
-  segmentTextSelected: { color: colors.ground },
   list: { gap: 8 },
   row: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10, padding: 12, borderRadius: 18, backgroundColor: colors.surface },
   rowTop: { backgroundColor: '#FDEBDA' },
