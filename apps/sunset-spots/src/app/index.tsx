@@ -48,8 +48,9 @@ export default function SunsetScreen() {
           info.sunset,
         )
       : null;
-  // Same zoom as the map draws: it fits the shown spots, or a close-up until they're in.
-  const map = useMapLayers(coords, mapRange((ranked ?? []).map((s) => s.distance)));
+  // The map's zoom: it fits the shown spots, or a close-up until they're in. The tiles are fetched for the same range.
+  const range = mapRange((ranked ?? []).map((s) => s.distance));
+  const map = useMapLayers(coords, range);
 
   if (state.status === 'loading') {
     return (
@@ -77,6 +78,7 @@ export default function SunsetScreen() {
             sunsetBearing={info.bearing}
             spots={ranked ?? []}
             layers={map.layers}
+            range={range}
             height={Math.round(windowHeight * MAP_SHARE)}
             top={insets.top + CARD_SPACE}
           />
@@ -108,7 +110,9 @@ export default function SunsetScreen() {
 
           {map.error && spots.state.status !== 'error' && (
             <View style={styles.notice}>
-              <Text style={styles.noticeText}>המפה (כבישים, שדות ויישובים) לא נטענה.</Text>
+              <Text style={styles.noticeText}>
+                {map.layers.roads.length ? 'חלק מהמפה לא נטען.' : 'המפה (כבישים, שדות ויישובים) לא נטענה.'}
+              </Text>
               <Text style={styles.errorDetail} selectable>
                 {map.error}
               </Text>

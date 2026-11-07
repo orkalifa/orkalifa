@@ -38,10 +38,14 @@ const PLACE_RANK: Record<string, number> = { city: 0, town: 1, village: 2, hamle
 
 export type TileId = { z: number; x: number; y: number };
 
-/** The tiles that cover a circle of `radiusMeters` around `center`. */
-export function tilesCovering(center: LatLon, radiusMeters: number, z = TILE_ZOOM): TileId[] {
-  const dLat = radiusMeters / 110574;
-  const dLon = radiusMeters / (111320 * Math.cos((center.lat * Math.PI) / 180));
+/** How far an area reaches from a point in each direction, in meters. */
+export type Extent = { north: number; south: number; east: number; west: number };
+
+/** The tiles that cover `extent` around `center` (a number means the same distance every way). */
+export function tilesCovering(center: LatLon, extent: number | Extent, z = TILE_ZOOM): TileId[] {
+  const e = typeof extent === 'number' ? { north: extent, south: extent, east: extent, west: extent } : extent;
+  const mPerLat = 110574;
+  const mPerLon = 111320 * Math.cos((center.lat * Math.PI) / 180);
   const n = 2 ** z;
   const tileX = (lon: number) => Math.floor(((lon + 180) / 360) * n);
   const tileY = (lat: number) => {
@@ -49,8 +53,8 @@ export function tilesCovering(center: LatLon, radiusMeters: number, z = TILE_ZOO
     return Math.floor(((1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2) * n);
   };
   const tiles: TileId[] = [];
-  for (let x = tileX(center.lon - dLon); x <= tileX(center.lon + dLon); x++) {
-    for (let y = tileY(center.lat + dLat); y <= tileY(center.lat - dLat); y++) tiles.push({ z, x, y });
+  for (let x = tileX(center.lon - e.west / mPerLon); x <= tileX(center.lon + e.east / mPerLon); x++) {
+    for (let y = tileY(center.lat + e.north / mPerLat); y <= tileY(center.lat - e.south / mPerLat); y++) tiles.push({ z, x, y });
   }
   return tiles;
 }
@@ -129,25 +133,49 @@ export function mergeLayers(parts: MapLayers[]): MapLayers {
   const seen = new Set<string>();
   const places: Place[] = [];
   for (const p of parts.flatMap((part) => part.places)) {
-    if (seen.has(p.name)) continue;
-    seen.add(p.name);
+    // A place repeated in a neighbouring tile has the same name at (almost) the same point; two different
+    // places can share a name, so the position is part of the key.
+    const key = `${p.name}|${p.lat.toFixed(3)}|${p.lon.toFixed(3)}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
     places.push(p);
   }
   return { roads: parts.flatMap((p) => p.roads), areas: parts.flatMap((p) => p.areas), places };
 }
 
-// Tiles don't change while the app runs, so each is fetched once.
+const FETCH_TIMEOUT_MS = 15000;
+/** Decoded tiles kept in memory; the oldest go first. A 10 km map is at most ~25 tiles. */
+const MAX_CACHED_TILES = 60;
+
+// Tiles don't change while the app runs, so each is fetched once (until it falls out of the cache).
 const tileCache = new Map<string, Promise<MapLayers>>();
 let tileUrl: Promise<string> | null = null;
 
+/** fetch that gives up after `ms`, so one stalled request can't hold up the whole map. */
+async function fetchWithTimeout(url: string, ms = FETCH_TIMEOUT_MS): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  try {
+    return await fetch(url, { signal: controller.signal });
+  } catch (e) {
+    throw controller.signal.aborted ? new Error(`timeout: ${url.replace(/^https?:\/\/[^/]+/, '')}`) : e;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /** The current tile URL template ("…/{z}/{x}/{y}.pbf"); OpenFreeMap puts the build date in the path. */
 function currentTileUrl(): Promise<string> {
-  tileUrl ??= fetch(TILEJSON_URL)
+  tileUrl ??= fetchWithTimeout(TILEJSON_URL)
     .then((r) => {
       if (!r.ok) throw new Error(`tiles: HTTP ${r.status}`);
-      return r.json() as Promise<{ tiles: string[] }>;
+      return r.json() as Promise<{ tiles?: unknown[] }>;
     })
-    .then((json) => json.tiles[0])
+    .then((json) => {
+      const template = json.tiles?.[0];
+      if (typeof template !== 'string') throw new Error('tiles: no tile URL');
+      return template;
+    })
     .catch((e: unknown) => {
       tileUrl = null; // try again next time
       throw e;
@@ -158,30 +186,43 @@ function currentTileUrl(): Promise<string> {
 function loadTile(template: string, tile: TileId): Promise<MapLayers> {
   const url = template.replace('{z}', String(tile.z)).replace('{x}', String(tile.x)).replace('{y}', String(tile.y));
   let pending = tileCache.get(url);
-  if (!pending) {
-    pending = fetch(url)
-      .then((r) => {
-        if (!r.ok) throw new Error(`tile ${tile.z}/${tile.x}/${tile.y}: HTTP ${r.status}`);
-        return r.arrayBuffer();
-      })
-      .then((buf) => decodeTile(buf, tile));
-    pending.catch(() => tileCache.delete(url));
+  if (pending) {
+    // Most recently used goes to the back of the line.
+    tileCache.delete(url);
     tileCache.set(url, pending);
+    return pending;
   }
+  pending = fetchWithTimeout(url)
+    .then((r) => {
+      // A new OpenFreeMap build moves the tiles; fetch the template again next time.
+      if (r.status === 404) tileUrl = null;
+      if (!r.ok) throw new Error(`tile ${tile.z}/${tile.x}/${tile.y}: HTTP ${r.status}`);
+      return r.arrayBuffer();
+    })
+    .then((buf) => decodeTile(buf, tile));
+  pending.catch(() => tileCache.delete(url));
+  tileCache.set(url, pending);
+  while (tileCache.size > MAX_CACHED_TILES) tileCache.delete(tileCache.keys().next().value!);
   return pending;
 }
 
+/** The map's layers, and if some tiles failed to load, why (the map then has gaps until a retry). */
+export type MapFetch = { layers: MapLayers; missing: string | null };
+
 /**
- * Roads, land and place names within `radiusMeters` of `center`, from tiles at zoom `z`. Tiles that
- * fail are left out; it only throws if none could be loaded, with the first reason.
+ * Roads, land and place names over `extent` around `center`, from tiles at zoom `z`. Tiles that
+ * fail are left out and reported in `missing`; it only throws if none could be loaded.
  */
-export async function fetchMapLayers(center: LatLon, radiusMeters: number, z = TILE_ZOOM): Promise<MapLayers> {
+export async function fetchMapLayers(center: LatLon, extent: number | Extent, z = TILE_ZOOM): Promise<MapFetch> {
   const template = await currentTileUrl();
-  const results = await Promise.allSettled(tilesCovering(center, radiusMeters, z).map((t) => loadTile(template, t)));
+  const tiles = tilesCovering(center, extent, z);
+  const results = await Promise.allSettled(tiles.map((t) => loadTile(template, t)));
   const loaded = results.flatMap((r) => (r.status === 'fulfilled' ? [r.value] : []));
-  if (loaded.length === 0) {
-    const failed = results.find((r): r is PromiseRejectedResult => r.status === 'rejected');
-    throw failed?.reason instanceof Error ? failed.reason : new Error('tiles: none loaded');
-  }
-  return mergeLayers(loaded);
+  const failed = results.filter((r): r is PromiseRejectedResult => r.status === 'rejected');
+  const reason = (r: PromiseRejectedResult) => (r.reason instanceof Error ? r.reason.message : String(r.reason));
+  if (loaded.length === 0) throw new Error(failed[0] ? reason(failed[0]) : 'tiles: none loaded');
+  return {
+    layers: mergeLayers(loaded),
+    missing: failed.length ? `${failed.length}/${tiles.length} tiles: ${reason(failed[0])}` : null,
+  };
 }

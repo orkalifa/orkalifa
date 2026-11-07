@@ -2,8 +2,8 @@ import { memo, useMemo, useState } from 'react';
 import { LayoutChangeEvent, StyleSheet, View } from 'react-native';
 import Svg, { Circle, Defs, G, Path, RadialGradient, Rect, Stop, Text as SvgText } from 'react-native-svg';
 import type { LatLon } from '../lib/geo';
-import { edgePoint, layoutLabels, makeProjection, mapRange, shapePath, type Box, type Projection } from '../lib/mapview';
-import type { AreaKind, MapLayers, Place } from '../lib/tiles';
+import { edgePoint, layoutLabels, makeProjection, shapePath, type Box, type PlacedLabel, type Projection } from '../lib/mapview';
+import type { AreaKind, MapLayers } from '../lib/tiles';
 import type { ShownSpot } from '../lib/travel';
 import { colors, fonts } from '../theme';
 import { ICON_PATHS, PIN_PATH } from './SpotPin';
@@ -46,9 +46,17 @@ type Props = {
   sunsetBearing: number;
   spots: ShownSpot[];
   layers: MapLayers;
+  /** How far the map shows around you, from mapRange(); the map tiles are fetched for the same range. */
+  range: number;
   height: number;
   /** Height covered by the card floating over the top of the map. */
   top?: number;
+};
+
+/** Pin size in px: the best spot's pin is bigger. Its tip is the spot. */
+const pinSize = (rank: number) => {
+  const w = rank === 0 ? 38 : 28;
+  return { w, h: w * 1.25 };
 };
 
 /**
@@ -56,17 +64,35 @@ type Props = {
  * names from OpenStreetMap, the sunset beam, and the spots as pins, zoomed to fit them (2–10 km).
  * Stands in for the Mapbox map until that lands, in the same warm style.
  */
-export function SpotMap({ from, sunsetBearing, spots, layers, height, top = 0 }: Props) {
+export function SpotMap({ from, sunsetBearing, spots, layers, range, height, top = 0 }: Props) {
   const [width, setWidth] = useState(0);
   const onLayout = (e: LayoutChangeEvent) => setWidth(e.nativeEvent.layout.width);
-  const range = mapRange(spots.map((s) => s.distance));
+  const { lat, lon } = from;
+
+  // Names keep clear of the pins and the sun. The screen re-renders every second for the countdown,
+  // so the layout is redone only when the places, the view or the pins actually move.
+  const pinKey = spots.map((s) => `${s.lat},${s.lon}`).join(';');
+  const bearingKey = Math.round(sunsetBearing);
+  const labels = useMemo(() => {
+    if (width === 0) return [];
+    const proj = makeProjection({ lat, lon }, width, height, range, top);
+    const pins: Box[] = (pinKey ? pinKey.split(';') : []).map((pair, rank) => {
+      const [pLat, pLon] = pair.split(',').map(Number);
+      const p = proj.toXY({ lat: pLat, lon: pLon });
+      const { w, h } = pinSize(rank);
+      return { x0: p.x - w / 2, y0: p.y - h - 4, x1: p.x + w / 2 + 8, y1: p.y };
+    });
+    const sun = edgePoint(proj, bearingKey, 24);
+    const sunBox: Box = { x0: sun.x - 20, y0: sun.y - 20, x1: sun.x + 20, y1: sun.y + 20 };
+    return layoutLabels(layers.places, proj, MAX_LABELS, [...pins, sunBox]);
+  }, [layers.places, lat, lon, width, height, range, top, pinKey, bearingKey]);
 
   return (
     <View style={[styles.box, { height }]} onLayout={onLayout} accessibilityLabel="מפת המקומות סביבך">
       {width > 0 && (
         <Svg width={width} height={height}>
-          <BaseLayers lat={from.lat} lon={from.lon} width={width} height={height} top={top} range={range} layers={layers} />
-          <Overlay proj={makeProjection(from, width, height, range, top)} sunsetBearing={sunsetBearing} spots={spots} places={layers.places} />
+          <BaseLayers lat={lat} lon={lon} width={width} height={height} top={top} range={range} layers={layers} />
+          <Overlay proj={makeProjection(from, width, height, range, top)} sunsetBearing={sunsetBearing} spots={spots} labels={labels} />
         </Svg>
       )}
     </View>
@@ -134,17 +160,8 @@ const BaseLayers = memo(function BaseLayers({
   );
 });
 
-/** Pin size in px: the best spot's pin is bigger. Its tip is the spot. */
-const pinSize = (rank: number) => {
-  const w = rank === 0 ? 38 : 28;
-  return { w, h: w * 1.25 };
-};
-
-/**
- * Sunset beam, the sun at the map's edge, place names, the spot pins and you. Cheap, redrawn as the
- * spots re-rank; names are placed here so they can keep clear of the pins.
- */
-function Overlay({ proj, sunsetBearing, spots, places }: { proj: Projection; sunsetBearing: number; spots: ShownSpot[]; places: Place[] }) {
+/** Sunset beam, the sun at the map's edge, place names, the spot pins and you. Cheap, redrawn as the spots re-rank. */
+function Overlay({ proj, sunsetBearing, spots, labels }: { proj: Projection; sunsetBearing: number; spots: ShownSpot[]; labels: PlacedLabel[] }) {
   const { center } = proj;
   const far = Math.hypot(proj.width, proj.height);
   const ray = (bearing: number) => {
@@ -156,13 +173,6 @@ function Overlay({ proj, sunsetBearing, spots, places }: { proj: Projection; sun
   const sun = edgePoint(proj, sunsetBearing, 24);
   // Far spots first so near ones sit on top; the best spot always last.
   const drawn = [...spots].reverse();
-  const pinBoxes: Box[] = spots.map((spot, rank) => {
-    const p = proj.toXY(spot);
-    const { w, h } = pinSize(rank);
-    return { x0: p.x - w / 2, y0: p.y - h - 4, x1: p.x + w / 2 + 8, y1: p.y };
-  });
-  const sunBox: Box = { x0: sun.x - 20, y0: sun.y - 20, x1: sun.x + 20, y1: sun.y + 20 };
-  const labels = layoutLabels(places, proj, MAX_LABELS, [...pinBoxes, sunBox]);
 
   return (
     <G>

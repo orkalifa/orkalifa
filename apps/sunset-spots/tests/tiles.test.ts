@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { distanceMeters } from '../src/lib/geo.ts';
-import { decodeTile, mergeLayers, tilePointToLatLon, tilesCovering, zoomForRange } from '../src/lib/tiles.ts';
+import { decodeTile, fetchMapLayers, mergeLayers, tilePointToLatLon, tilesCovering, zoomForRange } from '../src/lib/tiles.ts';
 
 // A real OpenFreeMap tile (zoom 13) over the coastal plain near Ramla, saved as a fixture.
 const TILE = { z: 13, x: 4889, y: 3329 };
@@ -57,5 +57,43 @@ test('a zoomed-in map uses detailed tiles, a wide one coarse tiles, and stays ar
   for (const range of [2000, 3000, 4000, 6500, 8000, 10000]) {
     const n = tilesCovering(centre, range * 1.3, zoomForRange(range)).length;
     assert.ok(n <= 25, `${range} m → ${n} tiles`);
+  }
+});
+
+test('tilesCovering reaches further north when asked to (the map runs up behind the card)', () => {
+  const centre = { lat: 31.3, lon: 34.6 };
+  const even = tilesCovering(centre, 3000, 14);
+  const tall = tilesCovering(centre, { north: 6600, south: 3900, east: 3900, west: 3900 }, 14);
+  const minY = (ts: { y: number }[]) => Math.min(...ts.map((t) => t.y));
+  assert.ok(minY(tall) < minY(even), 'more tiles to the north');
+  assert.equal(Math.max(...tall.map((t) => t.y)), Math.max(...tilesCovering(centre, 3900, 14).map((t) => t.y)));
+});
+
+test('mergeLayers keeps two different places that share a name', () => {
+  const place = (lat: number) => ({ id: String(lat), name: 'נווה', rank: 2, lat, lon: 34.8 });
+  const merged = mergeLayers([
+    { roads: [], areas: [], places: [place(31.5)] },
+    { roads: [], areas: [], places: [place(31.5), place(31.7)] },
+  ]);
+  assert.deepEqual(merged.places.map((p) => p.lat), [31.5, 31.7]);
+});
+
+test('fetchMapLayers reports tiles that failed instead of leaving silent gaps', async () => {
+  const realFetch = globalThis.fetch;
+  const tile = fixture();
+  let tileCalls = 0;
+  globalThis.fetch = (async (url: string) => {
+    if (url.endsWith('/planet')) return new Response(JSON.stringify({ tiles: ['https://t.example/{z}/{x}/{y}.pbf'] }), { status: 200 });
+    tileCalls++;
+    // Every other tile fails, as on a patchy connection.
+    if (tileCalls % 2 === 0) return new Response('busy', { status: 503 });
+    return new Response(tile, { status: 200 });
+  }) as typeof fetch;
+  try {
+    const { layers, missing } = await fetchMapLayers({ lat: 29.6, lon: 34.9 }, 4000, 13);
+    assert.ok(layers.roads.length > 0);
+    assert.match(missing ?? '', /^\d+\/\d+ tiles: tile 13\/\d+\/\d+: HTTP 503$/);
+  } finally {
+    globalThis.fetch = realFetch;
   }
 });

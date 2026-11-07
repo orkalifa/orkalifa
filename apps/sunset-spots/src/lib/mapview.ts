@@ -113,15 +113,16 @@ export function layoutLabels(labels: LabelInput[], proj: Projection, max = 7, ob
   const hits = (a: Box, b: Box, gap: number) => a.x0 < b.x1 + gap && a.x1 + gap > b.x0 && a.y0 < b.y1 + gap && a.y1 + gap > b.y0;
   const boxes: Box[] = [];
   const placed: PlacedLabel[] = [];
-  const fromCenter = (l: LabelInput) => {
-    const p = proj.toXY(l);
-    return Math.hypot(p.x - proj.center.x, p.y - proj.center.y);
-  };
-  const ordered = [...labels].sort((a, b) => a.rank - b.rank || fromCenter(a) - fromCenter(b));
-  for (const label of ordered) {
+  // Project each place once, not inside the sort.
+  const ordered = labels
+    .map((label) => {
+      const at = proj.toXY(label);
+      return { label, at, dist: Math.hypot(at.x - proj.center.x, at.y - proj.center.y) };
+    })
+    .sort((a, b) => a.label.rank - b.label.rank || a.dist - b.dist);
+  for (const { label, at } of ordered) {
     if (placed.length >= max) break;
     const fontSize = FONT_SIZE_BY_RANK[Math.min(label.rank, FONT_SIZE_BY_RANK.length - 1)];
-    const at = proj.toXY(label);
     const halfW = (label.name.length * fontSize * 0.55) / 2 + 3;
     for (const nudge of LABEL_NUDGES) {
       const y = at.y + nudge;
