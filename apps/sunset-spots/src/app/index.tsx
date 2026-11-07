@@ -10,6 +10,7 @@ import { useMapLayers } from '../hooks/useMapLayers';
 import { useNow } from '../hooks/useNow';
 import { usePlaceName } from '../hooks/usePlaceName';
 import { useSpots } from '../hooks/useSpots';
+import { mapRange } from '../lib/mapview';
 import { rankSpots } from '../lib/score';
 import { bearingToHebrew, formatClock, formatCountdown, getSunsetInfo } from '../lib/sun';
 import { withReach } from '../lib/travel';
@@ -32,11 +33,23 @@ export default function SunsetScreen() {
   const { height: windowHeight } = useWindowDimensions();
   const coords = state.status === 'loading' ? null : state.coords;
   const spots = useSpots(coords);
-  const map = useMapLayers(coords);
   const place = usePlaceName(state.status === 'ready' ? state.coords : null);
   const info = coords ? getSunsetInfo(coords.latitude, coords.longitude, now) : null;
   const horizons = useHorizons(spots.state.status === 'ready' ? spots.state.spots : null, coords, info?.bearing ?? null);
   const [compassOpen, setCompassOpen] = useState(false);
+
+  const ranked =
+    coords && info && spots.state.status === 'ready'
+      ? withReach(
+          rankSpots(spots.state.spots, { lat: coords.latitude, lon: coords.longitude }, info.bearing, VIEW_WEIGHT, horizons.horizons).slice(0, 6),
+          'car',
+          now,
+          info.goldenHour,
+          info.sunset,
+        )
+      : null;
+  // The map zooms to fit the shown spots, so wait for them before fetching map tiles for that area.
+  const map = useMapLayers(spots.state.status === 'loading' ? null : coords, mapRange((ranked ?? []).map((s) => s.distance)));
 
   if (state.status === 'loading') {
     return (
@@ -54,17 +67,6 @@ export default function SunsetScreen() {
       </SafeAreaView>
     );
   }
-
-  const ranked =
-    spots.state.status === 'ready'
-      ? withReach(
-          rankSpots(spots.state.spots, { lat: latitude, lon: longitude }, info.bearing, VIEW_WEIGHT, horizons.horizons).slice(0, 6),
-          'car',
-          now,
-          info.goldenHour,
-          info.sunset,
-        )
-      : null;
 
   return (
     <View style={styles.screen}>
@@ -159,7 +161,7 @@ export default function SunsetScreen() {
             )}
           </View>
 
-          <Text style={styles.soon}>נתוני מפה ומקומות: © OpenStreetMap contributors · נתוני גובה: Open-Meteo (Copernicus DEM)</Text>
+          <Text style={styles.soon}>מפה: OpenFreeMap © OpenMapTiles · נתונים: © OpenStreetMap contributors · גובה: Open-Meteo (Copernicus DEM)</Text>
         </View>
       </ScrollView>
 

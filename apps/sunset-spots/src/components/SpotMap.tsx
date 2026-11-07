@@ -3,12 +3,24 @@ import { LayoutChangeEvent, StyleSheet, View } from 'react-native';
 import Svg, { Circle, Defs, Ellipse, G, Path, RadialGradient, Rect, Stop, Text as SvgText } from 'react-native-svg';
 import type { LatLon } from '../lib/geo';
 import { edgePoint, layoutLabels, makeProjection, mapRange, shapePath, type Projection } from '../lib/mapview';
-import type { AreaKind, MapLayers } from '../lib/osm';
+import type { AreaKind, MapLayers } from '../lib/tiles';
 import type { ShownSpot } from '../lib/travel';
 import { colors, fonts } from '../theme';
 import { ICON_PATHS, PIN_PATH } from './SpotPin';
 
 const LABELLED = 3;
+/** Streets only when zoomed in: further out a town's streets merge into one white blob. */
+const STREETS_MAX_RANGE_M = 3500;
+/**
+ * Road look by rank (0 main roads … 3 streets): main roads chunky and toy-like with an outline,
+ * shrinking down to a thin white line, so towns don't turn into a white tangle.
+ */
+const ROAD_STYLE = [
+  { edge: 9, fill: 6 },
+  { edge: 7, fill: 4.5 },
+  { edge: 0, fill: 3 },
+  { edge: 0, fill: 2 },
+];
 
 // Warm, Waze-like ground colours, matching the mockup (ideas/mockups/sunset-app/).
 const MAP = {
@@ -84,10 +96,11 @@ const BaseLayers = memo(function BaseLayers({
         .filter((a): a is { id: string; kind: AreaKind; d: string } => a.d !== null),
     );
     const roads = layers.roads
-      .map((r) => ({ id: r.id, major: r.major, d: shapePath(r.points, proj, false) }))
-      .filter((r): r is { id: string; major: boolean; d: string } => r.d !== null)
-      // Minor streets first so main roads sit on top at junctions.
-      .sort((a, b) => Number(a.major) - Number(b.major));
+      .filter((r) => r.rank < 3 || range <= STREETS_MAX_RANGE_M)
+      .map((r) => ({ id: r.id, rank: r.rank, d: shapePath(r.points, proj, false) }))
+      .filter((r): r is { id: string; rank: number; d: string } => r.d !== null)
+      // Small roads first so bigger ones sit on top at junctions.
+      .sort((a, b) => b.rank - a.rank);
     return { areas, roads, labels: layoutLabels(layers.places, proj) };
   }, [lat, lon, width, height, top, range, layers]);
 
@@ -111,11 +124,13 @@ const BaseLayers = memo(function BaseLayers({
           strokeLinejoin="round"
         />
       ))}
+      {shapes.roads.map((r) =>
+        ROAD_STYLE[r.rank].edge ? (
+          <Path key={`${r.id}-c`} d={r.d} fill="none" stroke={MAP.roadEdge} strokeWidth={ROAD_STYLE[r.rank].edge} strokeLinecap="round" strokeLinejoin="round" />
+        ) : null,
+      )}
       {shapes.roads.map((r) => (
-        <Path key={`${r.id}-c`} d={r.d} fill="none" stroke={MAP.roadEdge} strokeWidth={r.major ? 12 : 7.5} strokeLinecap="round" strokeLinejoin="round" />
-      ))}
-      {shapes.roads.map((r) => (
-        <Path key={r.id} d={r.d} fill="none" stroke={colors.white} strokeWidth={r.major ? 8 : 4.5} strokeLinecap="round" strokeLinejoin="round" />
+        <Path key={r.id} d={r.d} fill="none" stroke={colors.white} strokeWidth={ROAD_STYLE[r.rank].fill} strokeLinecap="round" strokeLinejoin="round" />
       ))}
       {shapes.labels.map((l) => (
         <G key={l.id}>

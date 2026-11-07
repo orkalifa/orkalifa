@@ -99,16 +99,25 @@ const FONT_SIZE_BY_RANK = [15, 13, 12, 11];
 const LABEL_NUDGES = [0, -22, 30];
 
 /**
- * Places settlement names, most important first, nudging a name up or down if it would cover
- * a name already placed or you in the middle, and dropping it if nothing fits or it runs off the map.
+ * Places settlement names, most important (then nearest) first, nudging a name up or down if it would
+ * cover a name already placed or you in the middle, and dropping it if nothing fits or it runs off the map.
+ * At most `max` names, with some air between them: the map is for finding a spot, not reading an atlas.
  * `rank`: 0 city, 1 town, 2 village, 3 hamlet.
  */
-export function layoutLabels(labels: LabelInput[], proj: Projection): PlacedLabel[] {
-  const boxes: { x0: number; y0: number; x1: number; y1: number }[] = [
-    { x0: proj.center.x - 18, y0: proj.center.y - 18, x1: proj.center.x + 18, y1: proj.center.y + 18 },
-  ];
+export function layoutLabels(labels: LabelInput[], proj: Projection, max = 7): PlacedLabel[] {
+  const GAP = 10;
+  type Box = { x0: number; y0: number; x1: number; y1: number };
+  const you: Box = { x0: proj.center.x - 18, y0: proj.center.y - 18, x1: proj.center.x + 18, y1: proj.center.y + 18 };
+  const hits = (a: Box, b: Box, gap: number) => a.x0 < b.x1 + gap && a.x1 + gap > b.x0 && a.y0 < b.y1 + gap && a.y1 + gap > b.y0;
+  const boxes: Box[] = [];
   const placed: PlacedLabel[] = [];
-  for (const label of [...labels].sort((a, b) => a.rank - b.rank)) {
+  const fromCenter = (l: LabelInput) => {
+    const p = proj.toXY(l);
+    return Math.hypot(p.x - proj.center.x, p.y - proj.center.y);
+  };
+  const ordered = [...labels].sort((a, b) => a.rank - b.rank || fromCenter(a) - fromCenter(b));
+  for (const label of ordered) {
+    if (placed.length >= max) break;
     const fontSize = FONT_SIZE_BY_RANK[Math.min(label.rank, FONT_SIZE_BY_RANK.length - 1)];
     const at = proj.toXY(label);
     const halfW = (label.name.length * fontSize * 0.55) / 2 + 3;
@@ -116,7 +125,7 @@ export function layoutLabels(labels: LabelInput[], proj: Projection): PlacedLabe
       const y = at.y + nudge;
       const box = { x0: at.x - halfW, y0: y - fontSize, x1: at.x + halfW, y1: y + 4 };
       if (box.x0 < 4 || box.x1 > proj.width - 4 || box.y0 < proj.top + 4 || box.y1 > proj.height - 4) continue;
-      if (boxes.some((b) => box.x0 < b.x1 && box.x1 > b.x0 && box.y0 < b.y1 && box.y1 > b.y0)) continue;
+      if (hits(box, you, 0) || boxes.some((b) => hits(box, b, GAP))) continue;
       boxes.push(box);
       placed.push({ id: label.id, name: label.name, fontSize, x: at.x, y });
       break;
