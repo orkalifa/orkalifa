@@ -78,3 +78,16 @@ test('layoutLabels puts the bigger place first and moves the smaller one aside',
   assert.equal(town.y, proj.toXY(at(0, 2050)).y);
   assert.ok(Math.abs(village.y - town.y) >= town.fontSize, `${village.y} vs ${town.y}`);
 });
+
+test('layoutLabels keeps names off the pins', () => {
+  const proj = makeProjection(HOME, 400, 400, 5000);
+  const place = { id: 'v', name: 'מושב', rank: 2, ...destinationPoint(HOME, 0, 2000) };
+  const at = proj.toXY(place);
+  const free = layoutLabels([place], proj);
+  assert.equal(free[0].y, at.y);
+  // A pin right over the name's spot: the name moves aside instead of hiding under it.
+  const pin = { x0: at.x - 20, y0: at.y - 18, x1: at.x + 20, y1: at.y + 6 };
+  const moved = layoutLabels([place], proj, 7, [pin]);
+  assert.equal(moved.length, 1);
+  assert.notEqual(moved[0].y, at.y);
+});

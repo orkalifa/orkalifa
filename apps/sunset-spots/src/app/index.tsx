@@ -48,8 +48,8 @@ export default function SunsetScreen() {
           info.sunset,
         )
       : null;
-  // The map zooms to fit the shown spots, so wait for them before fetching map tiles for that area.
-  const map = useMapLayers(spots.state.status === 'loading' ? null : coords, mapRange((ranked ?? []).map((s) => s.distance)));
+  // Same zoom as the map draws: it fits the shown spots, or a close-up until they're in.
+  const map = useMapLayers(coords, mapRange((ranked ?? []).map((s) => s.distance)));
 
   if (state.status === 'loading') {
     return (

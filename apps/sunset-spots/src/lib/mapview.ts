@@ -53,7 +53,7 @@ export function mapRange(distances: number[], min = 2000, max = 10000): number {
  * kept one (a field edge can have hundreds of points that all fall on the same pixel). Kept well
  * under a pixel so curves like roundabouts stay round. Null if the shape is too small to see or off screen.
  */
-export function shapePath(points: LatLon[], proj: Projection, closed: boolean, minStep = 0.5): string | null {
+export function shapePath(points: LatLon[], proj: Projection, closed: boolean, minStep = 0.5, minSize = 2): string | null {
   if (points.length < 2) return null;
   let d = '';
   let last: Point | null = null;
@@ -75,7 +75,7 @@ export function shapePath(points: LatLon[], proj: Projection, closed: boolean, m
     maxY = Math.max(maxY, p.y);
   });
   if (maxX < 0 || maxY < 0 || minX > proj.width || minY > proj.height) return null;
-  if (closed && (kept < 3 || (maxX - minX < 2 && maxY - minY < 2))) return null;
+  if (closed && (kept < 3 || (maxX - minX < minSize && maxY - minY < minSize))) return null;
   return closed ? `${d}Z` : d;
 }
 
@@ -102,11 +102,13 @@ const LABEL_NUDGES = [0, -22, 30];
  * Places settlement names, most important (then nearest) first, nudging a name up or down if it would
  * cover a name already placed or you in the middle, and dropping it if nothing fits or it runs off the map.
  * At most `max` names, with some air between them: the map is for finding a spot, not reading an atlas.
+ * `obstacles` are screen areas a name must not cover (the pins).
  * `rank`: 0 city, 1 town, 2 village, 3 hamlet.
  */
-export function layoutLabels(labels: LabelInput[], proj: Projection, max = 7): PlacedLabel[] {
+export type Box = { x0: number; y0: number; x1: number; y1: number };
+
+export function layoutLabels(labels: LabelInput[], proj: Projection, max = 7, obstacles: Box[] = []): PlacedLabel[] {
   const GAP = 10;
-  type Box = { x0: number; y0: number; x1: number; y1: number };
   const you: Box = { x0: proj.center.x - 18, y0: proj.center.y - 18, x1: proj.center.x + 18, y1: proj.center.y + 18 };
   const hits = (a: Box, b: Box, gap: number) => a.x0 < b.x1 + gap && a.x1 + gap > b.x0 && a.y0 < b.y1 + gap && a.y1 + gap > b.y0;
   const boxes: Box[] = [];
@@ -125,7 +127,7 @@ export function layoutLabels(labels: LabelInput[], proj: Projection, max = 7): P
       const y = at.y + nudge;
       const box = { x0: at.x - halfW, y0: y - fontSize, x1: at.x + halfW, y1: y + 4 };
       if (box.x0 < 4 || box.x1 > proj.width - 4 || box.y0 < proj.top + 4 || box.y1 > proj.height - 4) continue;
-      if (hits(box, you, 0) || boxes.some((b) => hits(box, b, GAP))) continue;
+      if (hits(box, you, 0) || obstacles.some((o) => hits(box, o, 0)) || boxes.some((b) => hits(box, b, GAP))) continue;
       boxes.push(box);
       placed.push({ id: label.id, name: label.name, fontSize, x: at.x, y });
       break;

@@ -1,9 +1,9 @@
 import { memo, useMemo, useState } from 'react';
 import { LayoutChangeEvent, StyleSheet, View } from 'react-native';
-import Svg, { Circle, Defs, Ellipse, G, Path, RadialGradient, Rect, Stop, Text as SvgText } from 'react-native-svg';
+import Svg, { Circle, Defs, G, Path, RadialGradient, Rect, Stop, Text as SvgText } from 'react-native-svg';
 import type { LatLon } from '../lib/geo';
-import { edgePoint, layoutLabels, makeProjection, mapRange, shapePath, type Projection } from '../lib/mapview';
-import type { AreaKind, MapLayers } from '../lib/tiles';
+import { edgePoint, layoutLabels, makeProjection, mapRange, shapePath, type Box, type Projection } from '../lib/mapview';
+import type { AreaKind, MapLayers, Place } from '../lib/tiles';
 import type { ShownSpot } from '../lib/travel';
 import { colors, fonts } from '../theme';
 import { ICON_PATHS, PIN_PATH } from './SpotPin';
@@ -17,22 +17,27 @@ const STREETS_MAX_RANGE_M = 3500;
  */
 const ROAD_STYLE = [
   { edge: 9, fill: 6 },
-  { edge: 7, fill: 4.5 },
+  { edge: 0, fill: 4.5 },
   { edge: 0, fill: 3 },
   { edge: 0, fill: 2 },
 ];
 
 // Warm, Waze-like ground colours, matching the mockup (ideas/mockups/sunset-app/).
+// Kept light and close together on purpose: the map is a calm backdrop for the pins and the sunset,
+// so land use is a hint, not a pattern, and nothing on it is darker than it needs to be.
 const MAP = {
   ground: '#FCEBD5',
-  // Fields barely set off from the ground: there are so many that anything stronger turns into a grid of tiles.
   field: '#F9E4C9',
-  green: '#E2E2B4',
-  water: '#BFDCDD',
-  town: '#F3CDAE',
-  roadEdge: '#E7B48A',
-  label: '#8A5A3E',
+  green: '#E6E6BE',
+  water: '#C9E2E2',
+  town: '#F7DCC4',
+  roadEdge: '#EFC9A6',
+  label: '#9E6E50',
 };
+/** Areas smaller than this (px across) are dropped: scattered specks are noise at this scale. */
+const MIN_AREA_PX = 8;
+/** Place names on the map at most. */
+const MAX_LABELS = 5;
 
 const AREA_ORDER: AreaKind[] = ['field', 'green', 'water', 'town'];
 
@@ -61,7 +66,7 @@ export function SpotMap({ from, sunsetBearing, spots, layers, height, top = 0 }:
       {width > 0 && (
         <Svg width={width} height={height}>
           <BaseLayers lat={from.lat} lon={from.lon} width={width} height={height} top={top} range={range} layers={layers} />
-          <Overlay proj={makeProjection(from, width, height, range, top)} sunsetBearing={sunsetBearing} spots={spots} />
+          <Overlay proj={makeProjection(from, width, height, range, top)} sunsetBearing={sunsetBearing} spots={spots} places={layers.places} />
         </Svg>
       )}
     </View>
@@ -91,7 +96,7 @@ const BaseLayers = memo(function BaseLayers({
     const areas = AREA_ORDER.flatMap((kind) =>
       layers.areas
         .filter((a) => a.kind === kind)
-        .map((a) => ({ id: a.id, kind, d: shapePath(a.points, proj, true) }))
+        .map((a) => ({ id: a.id, kind, d: shapePath(a.points, proj, true, 0.5, MIN_AREA_PX) }))
         .filter((a): a is { id: string; kind: AreaKind; d: string } => a.d !== null),
     );
     const roads = layers.roads
@@ -100,7 +105,7 @@ const BaseLayers = memo(function BaseLayers({
       .filter((r): r is { id: string; rank: number; d: string } => r.d !== null)
       // Small roads first so bigger ones sit on top at junctions.
       .sort((a, b) => b.rank - a.rank);
-    return { areas, roads, labels: layoutLabels(layers.places, proj) };
+    return { areas, roads };
   }, [lat, lon, width, height, top, range, layers]);
 
   const areaFill: Record<AreaKind, string> = {
@@ -125,23 +130,21 @@ const BaseLayers = memo(function BaseLayers({
       {shapes.roads.map((r) => (
         <Path key={r.id} d={r.d} fill="none" stroke={colors.white} strokeWidth={ROAD_STYLE[r.rank].fill} strokeLinecap="round" strokeLinejoin="round" />
       ))}
-      {shapes.labels.map((l) => (
-        <G key={l.id}>
-          {/* A halo in the ground colour keeps names readable over roads (react-native-svg has no paint-order). */}
-          <SvgText x={l.x} y={l.y} fontSize={l.fontSize} fontFamily={fonts.semibold} fill={MAP.ground} stroke={MAP.ground} strokeWidth={4} strokeLinejoin="round" textAnchor="middle">
-            {l.name}
-          </SvgText>
-          <SvgText x={l.x} y={l.y} fontSize={l.fontSize} fontFamily={fonts.semibold} fill={MAP.label} textAnchor="middle">
-            {l.name}
-          </SvgText>
-        </G>
-      ))}
     </G>
   );
 });
 
-/** Sunset beam, the sun at the map's edge, the spot pins and you. Cheap, redrawn as the spots re-rank. */
-function Overlay({ proj, sunsetBearing, spots }: { proj: Projection; sunsetBearing: number; spots: ShownSpot[] }) {
+/** Pin size in px: the best spot's pin is bigger. Its tip is the spot. */
+const pinSize = (rank: number) => {
+  const w = rank === 0 ? 38 : 28;
+  return { w, h: w * 1.25 };
+};
+
+/**
+ * Sunset beam, the sun at the map's edge, place names, the spot pins and you. Cheap, redrawn as the
+ * spots re-rank; names are placed here so they can keep clear of the pins.
+ */
+function Overlay({ proj, sunsetBearing, spots, places }: { proj: Projection; sunsetBearing: number; spots: ShownSpot[]; places: Place[] }) {
   const { center } = proj;
   const far = Math.hypot(proj.width, proj.height);
   const ray = (bearing: number) => {
@@ -153,6 +156,13 @@ function Overlay({ proj, sunsetBearing, spots }: { proj: Projection; sunsetBeari
   const sun = edgePoint(proj, sunsetBearing, 24);
   // Far spots first so near ones sit on top; the best spot always last.
   const drawn = [...spots].reverse();
+  const pinBoxes: Box[] = spots.map((spot, rank) => {
+    const p = proj.toXY(spot);
+    const { w, h } = pinSize(rank);
+    return { x0: p.x - w / 2, y0: p.y - h - 4, x1: p.x + w / 2 + 8, y1: p.y };
+  });
+  const sunBox: Box = { x0: sun.x - 20, y0: sun.y - 20, x1: sun.x + 20, y1: sun.y + 20 };
+  const labels = layoutLabels(places, proj, MAX_LABELS, [...pinBoxes, sunBox]);
 
   return (
     <G>
@@ -166,14 +176,24 @@ function Overlay({ proj, sunsetBearing, spots }: { proj: Projection; sunsetBeari
       <Circle cx={sun.x} cy={sun.y} r={20} fill={colors.gold} opacity={0.35} />
       <Circle cx={sun.x} cy={sun.y} r={12} fill="#F7A23A" stroke={colors.white} strokeWidth={3} />
 
+      {labels.map((l) => (
+        <G key={l.id}>
+          {/* A halo in the ground colour keeps names readable over roads (react-native-svg has no paint-order). */}
+          <SvgText x={l.x} y={l.y} fontSize={l.fontSize} fontFamily={fonts.semibold} fill={MAP.ground} stroke={MAP.ground} strokeWidth={4} strokeLinejoin="round" textAnchor="middle">
+            {l.name}
+          </SvgText>
+          <SvgText x={l.x} y={l.y} fontSize={l.fontSize} fontFamily={fonts.semibold} fill={MAP.label} textAnchor="middle">
+            {l.name}
+          </SvgText>
+        </G>
+      ))}
+
       {drawn.map((spot) => {
         const rank = spots.indexOf(spot);
         const p = proj.toXY(spot);
-        const w = rank === 0 ? 38 : 28;
-        const h = w * 1.25;
+        const { w, h } = pinSize(rank);
         return (
           <G key={spot.id} opacity={spot.reach.opacity}>
-            <Ellipse cx={p.x} cy={p.y} rx={9} ry={3.5} fill={colors.ink} opacity={0.18} />
             <G transform={`translate(${p.x - w / 2} ${p.y - h}) scale(${w / 40})`}>
               <Path d={PIN_PATH} fill={spot.reach.color} stroke={colors.white} strokeWidth={3} />
               <G transform="translate(10 9) scale(0.8333)">
@@ -183,7 +203,7 @@ function Overlay({ proj, sunsetBearing, spots }: { proj: Projection; sunsetBeari
             {rank < LABELLED && (
               <G>
                 <Circle cx={p.x + w / 2} cy={p.y - h + 4} r={8} fill={colors.white} />
-                <SvgText x={p.x + w / 2} y={p.y - h + 8} fontSize={11} fontFamily={fonts.bold} fill={colors.ink} textAnchor="middle">
+                <SvgText x={p.x + w / 2} y={p.y - h + 8} fontSize={11} fontFamily={fonts.bold} fill={colors.orangeText} textAnchor="middle">
                   {`${rank + 1}`}
                 </SvgText>
               </G>
