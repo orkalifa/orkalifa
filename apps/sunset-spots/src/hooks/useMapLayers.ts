@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
-import { EMPTY_LAYERS, fetchMapLayers, type MapLayers } from '../lib/tiles';
+import { EMPTY_LAYERS, fetchMapLayers, zoomForRange, type MapLayers } from '../lib/tiles';
 import type { Coords } from './useLocation';
 
 /** Fetch a bit past what the map shows: its corners reach further than the zoom range, and so does the card's edge. */
-const OVERSCAN = 1.5;
+const OVERSCAN = 1.3;
 /** Round the radius so small changes in the zoom don't refetch; tiles already loaded come from the cache anyway. */
 const STEP_M = 1000;
 
@@ -18,11 +18,12 @@ export function useMapLayers(coords: Coords | null, rangeMeters: number) {
   const lat = coords?.latitude;
   const lon = coords?.longitude;
   const radius = Math.ceil((rangeMeters * OVERSCAN) / STEP_M) * STEP_M;
+  const zoom = zoomForRange(rangeMeters);
 
   useEffect(() => {
     if (lat === undefined || lon === undefined) return;
     let current = true;
-    fetchMapLayers({ lat, lon }, radius)
+    fetchMapLayers({ lat, lon }, radius, zoom)
       .then((next) => {
         if (!current) return;
         setLayers(next);
@@ -34,7 +35,7 @@ export function useMapLayers(coords: Coords | null, rangeMeters: number) {
     return () => {
       current = false;
     };
-  }, [lat, lon, radius, attempt]);
+  }, [lat, lon, radius, zoom, attempt]);
 
   const retry = useCallback(() => setAttempt((n) => n + 1), []);
 

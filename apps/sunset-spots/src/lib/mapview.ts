@@ -50,10 +50,10 @@ export function mapRange(distances: number[], min = 2000, max = 10000): number {
 
 /**
  * SVG path for a line or polygon, dropping points that land within `minStep` px of the last
- * kept one (a field edge can have hundreds of points that all fall on the same pixel).
- * Null if the shape is too small to see or entirely off screen.
+ * kept one (a field edge can have hundreds of points that all fall on the same pixel). Kept well
+ * under a pixel so curves like roundabouts stay round. Null if the shape is too small to see or off screen.
  */
-export function shapePath(points: LatLon[], proj: Projection, closed: boolean, minStep = 1.5): string | null {
+export function shapePath(points: LatLon[], proj: Projection, closed: boolean, minStep = 0.5): string | null {
   if (points.length < 2) return null;
   let d = '';
   let last: Point | null = null;

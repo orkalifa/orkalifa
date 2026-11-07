@@ -18,8 +18,19 @@ export type MapLayers = { roads: Road[]; areas: Area[]; places: Place[] };
 
 export const EMPTY_LAYERS: MapLayers = { roads: [], areas: [], places: [] };
 
-/** Zoom 12 tiles are ~8 km across here and still carry every street and field: a 10 km map is 3×3 to 4×4 tiles. */
+/** Zoom 12 tiles are ~8 km across here: a 10 km map is 3×3 to 4×4 tiles. */
 export const TILE_ZOOM = 12;
+
+/**
+ * Tile zoom for a map showing `rangeMeters` around you. Lower zooms are simplified (a roundabout
+ * becomes a few straight sides), so a zoomed-in map uses more detailed tiles; each step down
+ * quarters how many tiles cover the area, so a wide map uses coarser ones.
+ */
+export function zoomForRange(rangeMeters: number): number {
+  if (rangeMeters <= 3000) return 14;
+  if (rangeMeters <= 6500) return 13;
+  return TILE_ZOOM;
+}
 const TILEJSON_URL = 'https://tiles.openfreemap.org/planet';
 
 const ROAD_RANK: Record<string, number> = { motorway: 0, trunk: 0, primary: 0, secondary: 1, tertiary: 2, minor: 3 };
@@ -161,12 +172,12 @@ function loadTile(template: string, tile: TileId): Promise<MapLayers> {
 }
 
 /**
- * Roads, land and place names within `radiusMeters` of `center`. Tiles that fail are left out;
- * it only throws if none could be loaded, with the first reason.
+ * Roads, land and place names within `radiusMeters` of `center`, from tiles at zoom `z`. Tiles that
+ * fail are left out; it only throws if none could be loaded, with the first reason.
  */
-export async function fetchMapLayers(center: LatLon, radiusMeters: number): Promise<MapLayers> {
+export async function fetchMapLayers(center: LatLon, radiusMeters: number, z = TILE_ZOOM): Promise<MapLayers> {
   const template = await currentTileUrl();
-  const results = await Promise.allSettled(tilesCovering(center, radiusMeters).map((t) => loadTile(template, t)));
+  const results = await Promise.allSettled(tilesCovering(center, radiusMeters, z).map((t) => loadTile(template, t)));
   const loaded = results.flatMap((r) => (r.status === 'fulfilled' ? [r.value] : []));
   if (loaded.length === 0) {
     const failed = results.find((r): r is PromiseRejectedResult => r.status === 'rejected');

@@ -26,7 +26,8 @@ test('shapePath drops points on the same pixel and skips shapes off screen', () 
   const proj = makeProjection(HOME, 400, 400, 5000);
   const dense = Array.from({ length: 200 }, (_, i) => destinationPoint(HOME, 90, i));
   const d = shapePath(dense, proj, false)!;
-  assert.ok((d.match(/L/g) ?? []).length < 10, d);
+  // 200 points over ~7 px: kept about every half pixel, not all 200.
+  assert.ok((d.match(/L/g) ?? []).length < 20, d);
   assert.match(d, /^M200\.0 200\.0/);
 
   const far = destinationPoint(HOME, 0, 50000);

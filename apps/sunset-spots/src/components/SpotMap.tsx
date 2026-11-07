@@ -30,7 +30,6 @@ const MAP = {
   green: '#E2E2B4',
   water: '#BFDCDD',
   town: '#F3CDAE',
-  townEdge: '#EBAE80',
   roadEdge: '#E7B48A',
   label: '#8A5A3E',
 };
@@ -115,14 +114,8 @@ const BaseLayers = memo(function BaseLayers({
     <G>
       <Rect x={0} y={0} width={width} height={height} fill={MAP.ground} />
       {shapes.areas.map((a) => (
-        <Path
-          key={a.id}
-          d={a.d}
-          fill={areaFill[a.kind]}
-          stroke={a.kind === 'town' ? MAP.townEdge : 'none'}
-          strokeWidth={a.kind === 'town' ? 1 : 0}
-          strokeLinejoin="round"
-        />
+        // No outlines: areas arrive cut at tile edges, and an outline would trace those cuts.
+        <Path key={a.id} d={a.d} fill={areaFill[a.kind]} />
       ))}
       {shapes.roads.map((r) =>
         ROAD_STYLE[r.rank].edge ? (

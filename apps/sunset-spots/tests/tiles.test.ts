@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { distanceMeters } from '../src/lib/geo.ts';
-import { decodeTile, mergeLayers, tilePointToLatLon, tilesCovering } from '../src/lib/tiles.ts';
+import { decodeTile, mergeLayers, tilePointToLatLon, tilesCovering, zoomForRange } from '../src/lib/tiles.ts';
 
 // A real OpenFreeMap tile (zoom 13) over the coastal plain near Ramla, saved as a fixture.
 const TILE = { z: 13, x: 4889, y: 3329 };
@@ -47,4 +47,15 @@ test('mergeLayers keeps a place that sits in two tiles once', () => {
   const merged = mergeLayers([a, a]);
   assert.equal(merged.places.length, a.places.length);
   assert.equal(merged.roads.length, a.roads.length * 2);
+});
+
+test('a zoomed-in map uses detailed tiles, a wide one coarse tiles, and stays around 25 tiles or fewer', () => {
+  assert.equal(zoomForRange(2000), 14);
+  assert.equal(zoomForRange(5000), 13);
+  assert.equal(zoomForRange(10000), 12);
+  const centre = { lat: 31.3, lon: 34.6 };
+  for (const range of [2000, 3000, 4000, 6500, 8000, 10000]) {
+    const n = tilesCovering(centre, range * 1.3, zoomForRange(range)).length;
+    assert.ok(n <= 25, `${range} m → ${n} tiles`);
+  }
 });
