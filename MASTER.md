@@ -15,7 +15,7 @@
 | פרויקט | סטטוס | איפה זה חי | הצעד הבא | חוסם? |
 |---|---|---|---|---|
 | [Spotlight: אפליקציית שקיעות](ideas/2026-10-18-sunset-spots-app.md) | 🔨 בביצוע | `apps/sunset-spots`, ענף `claude/claude-improvement-ideas-2rof6t` | סבב בדיקה בטלפון של מפת האריחים החדשה (`/phone-test`) | — |
-| בוט מסחר IBKR (Paper) | 🔨 בביצוע | `apps/trading-bot/PROMPTS.md`, ענף `claude/upbeat-davinci-9esv6x`, סשן "Guidance" | Telegram מחובר ✅ (14.11). לצבור 30 עסקאות Paper ולעקוב אחרי הסיכום השבועי. להחליף טוקן (`/revoke`) אם טרם הוחלף | — |
+| בוט מסחר IBKR (Paper) | 🔨 בביצוע | `apps/trading-bot/PROMPTS.md`, ענף `claude/upbeat-davinci-9esv6x`, סשן "Guidance" | Telegram מחובר ✅ (14.11). לצבור 30 עסקאות Paper ולעקוב אחרי הסיכום השבועי. הטוקן הוחלף ✅ | — |
 | טבלת תקציב וחסכונות | ✅/? | סשן מקומי במחשב ("טבלת תקציב וחסכונות") | להחליט אם להכניס למאגר כפרויקט "כספים" | — |
 | [סדרת תיעוד "המסע"](ideas/2026-10-18-documentary-journey.md) | 📐 בתכנון | `ideas/episodes`, `ideas/mockups` | לקבוע תאריך צילום לפרק הראשון | — |
 | [הסבה מקצועית: הייטק מול כלכלה](ideas/2026-10-18-career-switch-roi.md) | 💡 רעיון | `ideas/career-switch-roi.py` | להריץ את המחשבון עם נתונים אישיים אמיתיים | — |
