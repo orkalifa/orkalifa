@@ -1,6 +1,6 @@
 # Spotlight — אפליקציית מקומות שקיעה
 
-ה־Brief המלא: [`ideas/2026-10-18-sunset-spots-app.md`](../../ideas/2026-10-18-sunset-spots-app.md)
+ה־Brief המלא ויומן הבנייה: [`project/BRIEF.md`](project/BRIEF.md)
 
 ## מה יש כרגע
 - **מסך ראשי עם מפה:** מפה חמה וצבעונית מ־OpenStreetMap, עם הצפון למעלה, שבה רואים:

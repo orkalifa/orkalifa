@@ -46,4 +46,4 @@ npx.cmd expo start --tunnel ngrok -c
 - לתקן מה שברור. מה שתלוי בטעם, לשאול בשאלה אחת ממוקדת.
 - לא לרשום בריפו מיקום אישי: שם יישוב או קואורדינטות שמופיעים בצילומי המסך.
 - להריץ לפני push: `npm test`, `npm run typecheck`, `EXPO_OFFLINE=1 CI=1 npx expo lint`, ובנייה עם `EXPO_OFFLINE=1 CI=1 npx expo export --platform android`.
-- לרשום שורה ב"יומן בנייה" של `ideas/2026-10-18-sunset-spots-app.md`: מה נבדק, מה עבד ומה פתוח.
+- לרשום שורה ב"יומן בנייה" של `project/BRIEF.md`: מה נבדק, מה עבד ומה פתוח.
