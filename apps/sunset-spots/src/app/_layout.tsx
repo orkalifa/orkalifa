@@ -16,7 +16,7 @@ export default function RootLayout() {
   return (
     <>
       <StatusBar style="dark" />
-      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.ground } }} />
+      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.sheet } }} />
     </>
   );
 }

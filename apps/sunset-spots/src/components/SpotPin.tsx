@@ -1,4 +1,4 @@
-import Svg, { G, Path } from 'react-native-svg';
+import Svg, { Ellipse, G, Path } from 'react-native-svg';
 import type { SpotKind } from '../lib/osm';
 import { colors } from '../theme';
 
@@ -14,12 +14,25 @@ export const ICON_PATHS: Record<SpotKind, string> = {
 export const PIN_PATH = 'M20 48C20 48 4 31 4 19A16 16 0 1 1 36 19C36 31 20 48 20 48Z';
 
 /**
- * Waze-style teardrop pin with an icon for the spot type. The tip is the spot's location.
+ * Playful Waze-style teardrop pin with an icon for the spot type. The tip is the spot's location.
  * `color` says whether you'd make it in time (see lib/travel.ts).
  */
-export function SpotPin({ kind, color, opacity = 1, size = 32 }: { kind: SpotKind; color: string; opacity?: number; size?: number }) {
+export function SpotPin({
+  kind,
+  color,
+  opacity = 1,
+  size = 32,
+  shadow = false,
+}: {
+  kind: SpotKind;
+  color: string;
+  opacity?: number;
+  size?: number;
+  shadow?: boolean;
+}) {
   return (
-    <Svg width={size} height={size * 1.25} viewBox="0 0 40 50" opacity={opacity} accessibilityElementsHidden importantForAccessibility="no">
+    <Svg width={size} height={size * 1.28} viewBox="0 0 40 52" opacity={opacity} accessibilityElementsHidden importantForAccessibility="no">
+      {shadow && <Ellipse cx={20} cy={48.5} rx={8} ry={2.8} fill="#2A1A12" opacity={0.18} />}
       <Path d={PIN_PATH} fill={color} stroke={colors.white} strokeWidth={3} />
       <G transform="translate(10 9) scale(0.8333)">
         <Path d={ICON_PATHS[kind]} fill="none" stroke={colors.white} strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" />

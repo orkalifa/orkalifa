@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import Svg, { Circle, Path } from 'react-native-svg';
 import { CompassButton, CompassSheet } from '../components/CompassSheet';
+import { SpotDetailSheet } from '../components/SpotDetailSheet';
 import { SpotList } from '../components/SpotList';
 import { SpotMap } from '../components/SpotMap';
 import { useHorizons } from '../hooks/useHorizons';
@@ -13,18 +15,18 @@ import { useSpots } from '../hooks/useSpots';
 import { mapRange } from '../lib/mapview';
 import { rankSpots } from '../lib/score';
 import { bearingToHebrew, formatClock, formatCountdown, getSunsetInfo } from '../lib/sun';
-import { withReach } from '../lib/travel';
-import { colors, fonts } from '../theme';
+import { withReach, type ShownSpot } from '../lib/travel';
+import { colors, fonts, getSkyPhase } from '../theme';
 
-/** Share of the screen height the map takes; the list of spots scrolls up underneath. */
-const MAP_SHARE = 0.62;
+/** Share of the screen height the map takes; the bottom sheet rises up cleanly over its lower edge. */
+const MAP_SHARE = 0.6;
 /**
  * How much the view counts against comfort (access and seating) when ranking spots.
  * One sensible mix instead of a setting: opening the app should be enough.
  */
 const VIEW_WEIGHT = 0.4;
-/** Space the sunset card takes over the top of the map, below the status bar. */
-const CARD_SPACE = 100;
+/** Space the floating sunset HUD takes over the top of the map, below the status bar. */
+const HUD_SPACE = 112;
 
 export default function SunsetScreen() {
   const { state, retry } = useLocation();
@@ -37,6 +39,7 @@ export default function SunsetScreen() {
   const info = coords ? getSunsetInfo(coords.latitude, coords.longitude, now) : null;
   const horizons = useHorizons(spots.state.status === 'ready' ? spots.state.spots : null, coords, info?.bearing ?? null);
   const [compassOpen, setCompassOpen] = useState(false);
+  const [selectedSpotId, setSelectedSpotId] = useState<string | null>(null);
 
   const ranked =
     coords && info && spots.state.status === 'ready'
@@ -48,6 +51,9 @@ export default function SunsetScreen() {
           info.sunset,
         )
       : null;
+
+  const selectedSpot: ShownSpot | null = ranked?.find((s) => s.id === selectedSpotId) ?? null;
+
   // The map's zoom: it fits the shown spots, or a close-up until they're in. The tiles are fetched for the same range.
   const range = mapRange((ranked ?? []).map((s) => s.distance));
   const map = useMapLayers(coords, range);
@@ -69,9 +75,14 @@ export default function SunsetScreen() {
     );
   }
 
+  const phase = getSkyPhase(now, info.goldenHour, info.sunset, info.isTomorrow);
+  const direction = bearingToHebrew(info.bearing);
+  const sunsetClock = formatClock(info.sunset);
+  const inTimeCount = ranked ? ranked.filter((s) => s.reach.inTime).length : 0;
+
   return (
     <View style={styles.screen}>
-      <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}>
+      <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 28 }} showsVerticalScrollIndicator={false}>
         <View>
           <SpotMap
             from={{ lat: latitude, lon: longitude }}
@@ -80,33 +91,63 @@ export default function SunsetScreen() {
             layers={map.layers}
             range={range}
             height={Math.round(windowHeight * MAP_SHARE)}
-            top={insets.top + CARD_SPACE}
+            top={insets.top + HUD_SPACE}
+            selectedId={selectedSpotId}
+            onSelectSpot={(spot) => setSelectedSpotId(spot.id)}
           />
 
-          <View style={[styles.card, { top: insets.top + 10 }]}>
-            <View style={styles.cardColumn}>
-              <Text style={styles.label} numberOfLines={1}>
-                {info.isTomorrow ? 'השקיעה מחר' : 'השקיעה היום'}
-                {place && ` · ${place}`}
-              </Text>
-              <Text style={styles.time}>{formatClock(info.sunset)}</Text>
+          {/* Sculpted Deep-Espresso Sunset HUD */}
+          <View style={[styles.hud, { top: insets.top + 10 }]}>
+            <View style={styles.hudTop}>
+              <View style={styles.hudRight}>
+                <View style={styles.sunIconBox}>
+                  <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
+                    <Path d="M3 17.5h18" stroke="rgba(255,235,210,0.45)" strokeWidth={1.8} strokeLinecap="round" />
+                    <Path d="M7 17.5a5 5 0 0 1 10 0" fill={phase.accent} />
+                    <Path d="M12 7V4.5M5.8 11.2 4.2 9.6M18.2 11.2l1.6-1.6" stroke={phase.accent} strokeWidth={1.8} strokeLinecap="round" />
+                  </Svg>
+                </View>
+                <View style={styles.hudTimeCol}>
+                  <Text style={styles.hudLabel} numberOfLines={1}>
+                    {info.isTomorrow ? 'השקיעה מחר' : 'השקיעה היום'}
+                    {place ? ` · ${place}` : ''}
+                  </Text>
+                  <Text style={styles.hudTime}>{sunsetClock}</Text>
+                </View>
+              </View>
+
+              <View style={[styles.countdownPill, { backgroundColor: phase.badgeBg }]}>
+                <View style={[styles.countdownDot, { backgroundColor: phase.accent }]} />
+                <View style={styles.countdownTextWrap}>
+                  <Text style={styles.countdownCaption}>בעוד</Text>
+                  <Text style={[styles.countdownValue, { color: phase.badgeText }]}>
+                    {formatCountdown(info.sunset.getTime() - now.getTime())}
+                  </Text>
+                </View>
+              </View>
             </View>
-            <View style={[styles.cardColumn, styles.alignStart]}>
-              <Text style={styles.label}>בעוד</Text>
-              <Text style={styles.countdown}>{formatCountdown(info.sunset.getTime() - now.getTime())}</Text>
+
+            {/* Thin golden-hour progress hairline */}
+            <View style={styles.progressTrack}>
+              <View style={[styles.progressFill, { width: `${Math.round(phase.progress * 100)}%`, backgroundColor: phase.accent }]} />
+            </View>
+
+            {/* Compact golden hour & bearing ribbon (replaces bulky stat boxes) */}
+            <View style={styles.hudFooter}>
+              <Text style={styles.hudMeta}>{`זהב ${formatClock(info.goldenHour)} · כיוון ${direction}`}</Text>
+              <Text style={[styles.hudPhase, { color: phase.accent }]}>{phase.label}</Text>
             </View>
           </View>
 
+          {/* Compass FAB positioned cleanly above the rising sheet curve */}
           <View style={styles.fab}>
             <CompassButton onPress={() => setCompassOpen(true)} />
           </View>
         </View>
 
-        <View style={styles.content}>
-          <View style={styles.facts}>
-            <Fact label="כיוון השקיעה" value={bearingToHebrew(info.bearing)} />
-            <Fact label="שעת הזהב מתחילה" value={formatClock(info.goldenHour)} />
-          </View>
+        {/* Layered Rounded Bottom Sheet */}
+        <View style={styles.sheet}>
+          <View style={styles.handle} />
 
           {map.error && spots.state.status !== 'error' && (
             <View style={styles.notice}>
@@ -123,21 +164,40 @@ export default function SunsetScreen() {
           )}
 
           {state.status === 'fallback' && (
-            <View style={styles.notice}>
-              <Text style={styles.noticeText}>
+            <View style={styles.noticeCompact}>
+              <Text style={[styles.noticeText, styles.noticeCompactText]}>
                 {state.reason === 'denied'
-                  ? 'אין הרשאת מיקום, אז מוצגת השקיעה בתל אביב.'
-                  : 'לא הצלחנו למצוא את המיקום, אז מוצגת השקיעה בתל אביב.'}
+                  ? 'אין הרשאת מיקום · מוצגת תל אביב'
+                  : 'לא נמצא מיקום · מוצגת תל אביב'}
               </Text>
-              <Pressable onPress={retry} style={styles.button} accessibilityRole="button">
-                <Text style={styles.buttonText}>לנסות שוב</Text>
+              <Pressable onPress={retry} style={styles.compactBtn} accessibilityRole="button">
+                <Text style={styles.compactBtnText}>נסה שוב</Text>
               </Pressable>
             </View>
           )}
 
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>מקומות לשקיעה סביבך</Text>
-            {spots.state.status === 'loading' && <Text style={styles.muted}>מחפש מקומות…</Text>}
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>מקומות לשקיעה סביבך</Text>
+              {ranked && ranked.length > 0 && (
+                <View style={styles.summaryPill}>
+                  <Text style={styles.summaryPillText}>
+                    {inTimeCount > 0 ? `${inTimeCount} בזמן הערב` : `${ranked.length} מקומות`}
+                  </Text>
+                </View>
+              )}
+            </View>
+
+            {spots.state.status === 'loading' && (
+              <View style={styles.loadingCard}>
+                <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+                  <Circle cx={12} cy={12} r={9} stroke={colors.lineStrong} strokeWidth={2.5} />
+                  <Path d="M12 3a9 9 0 0 1 9 9" stroke={colors.orange} strokeWidth={2.5} strokeLinecap="round" />
+                </Svg>
+                <Text style={styles.muted}>מחפש נקודות תצפית וספסלים סביבך…</Text>
+              </View>
+            )}
+
             {spots.state.status === 'error' && (
               <View style={styles.notice}>
                 <Text style={styles.noticeText}>לא הצלחנו לטעון מקומות מהמפה.</Text>
@@ -156,7 +216,17 @@ export default function SunsetScreen() {
                 </Pressable>
               </View>
             )}
-            {ranked && <SpotList spots={ranked} />}
+
+            {ranked && (
+              <SpotList
+                spots={ranked}
+                selectedId={selectedSpotId}
+                onSelectSpot={(spot) => setSelectedSpotId(spot.id)}
+                now={now}
+                goldenHour={info.goldenHour}
+              />
+            )}
+
             {spots.state.status === 'ready' && horizons.status === 'idle' && (
               <Text style={styles.soon}>בודק את קו האופק לכיוון השקיעה…</Text>
             )}
@@ -165,65 +235,193 @@ export default function SunsetScreen() {
             )}
           </View>
 
-          <Text style={styles.soon}>מפה: OpenFreeMap © OpenMapTiles · נתונים: © OpenStreetMap contributors · גובה: Open-Meteo (Copernicus DEM)</Text>
+          <Text style={styles.attribution}>
+            מפה: OpenFreeMap © OpenMapTiles · נתונים: © OpenStreetMap contributors · גובה: Open-Meteo
+          </Text>
         </View>
       </ScrollView>
 
-      <CompassSheet visible={compassOpen} bearing={info.bearing} onClose={() => setCompassOpen(false)} />
-    </View>
-  );
-}
+      <CompassSheet
+        visible={compassOpen}
+        bearing={info.bearing}
+        sunsetClock={sunsetClock}
+        onClose={() => setCompassOpen(false)}
+      />
 
-function Fact({ label, value, detail }: { label: string; value: string; detail?: string }) {
-  return (
-    <View style={styles.fact}>
-      <Text style={styles.label}>{label}</Text>
-      <Text style={styles.factValue} numberOfLines={1} adjustsFontSizeToFit>
-        {value}
-      </Text>
-      {detail && <Text style={styles.label}>{detail}</Text>}
+      <SpotDetailSheet
+        spot={selectedSpot}
+        now={now}
+        sunset={info.sunset}
+        goldenHour={info.goldenHour}
+        bearing={info.bearing}
+        onClose={() => setSelectedSpotId(null)}
+        // iOS can't present a modal while another is still sliding away, so wait for the spot sheet to close.
+        onOpenCompass={() => setTimeout(() => setCompassOpen(true), 400)}
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.ground },
+  screen: { flex: 1, backgroundColor: colors.sheet },
   center: { alignItems: 'center', justifyContent: 'center' },
-  content: { padding: 16, gap: 20, alignItems: 'stretch' },
-  card: {
+  hud: {
     position: 'absolute',
     left: 12,
     right: 12,
-    flexDirection: 'row-reverse',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    backgroundColor: colors.surface,
-    borderRadius: 20,
-    shadowColor: colors.orangeText,
-    shadowOpacity: 0.16,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 4,
+    paddingTop: 12,
+    paddingBottom: 10,
+    paddingHorizontal: 14,
+    backgroundColor: 'rgba(26, 18, 14, 0.92)',
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: colors.obsidianBorder,
+    gap: 10,
+    shadowColor: '#1A120E',
+    shadowOpacity: 0.24,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 8,
   },
-  cardColumn: { alignItems: 'flex-end', gap: 2, flexShrink: 1 },
-  alignStart: { alignItems: 'flex-start' },
-  fab: { position: 'absolute', left: 12, bottom: 14 },
-  label: { fontFamily: fonts.regular, fontSize: 13, color: colors.muted, textAlign: 'right' },
-  time: { fontFamily: fonts.bold, fontSize: 30, color: colors.ink },
-  countdown: { fontFamily: fonts.semibold, fontSize: 22, color: colors.orangeText },
-  facts: { flexDirection: 'row-reverse', gap: 12 },
-  fact: { flex: 1, padding: 14, backgroundColor: colors.surface, borderRadius: 18, gap: 4, alignItems: 'flex-end' },
-  factValue: { fontFamily: fonts.semibold, fontSize: 16, color: colors.ink, textAlign: 'right' },
-  notice: { padding: 14, backgroundColor: colors.sand, borderRadius: 18, gap: 10, alignItems: 'flex-end' },
+  hudTop: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  hudRight: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 10,
+    flexShrink: 1,
+  },
+  sunIconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255, 224, 185, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 224, 185, 0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  hudTimeCol: { alignItems: 'flex-end', flexShrink: 1 },
+  hudLabel: { fontFamily: fonts.regular, fontSize: 12, color: '#C8B29F', textAlign: 'right' },
+  hudTime: { fontFamily: fonts.bold, fontSize: 28, color: '#FFF8F0', lineHeight: 32 },
+  countdownPill: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+  },
+  countdownDot: { width: 7, height: 7, borderRadius: 3.5 },
+  countdownTextWrap: { alignItems: 'flex-start' },
+  countdownCaption: { fontFamily: fonts.regular, fontSize: 10.5, color: 'rgba(255, 236, 212, 0.72)' },
+  countdownValue: { fontFamily: fonts.bold, fontSize: 16 },
+  progressTrack: {
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: 'rgba(255, 236, 212, 0.12)',
+    overflow: 'hidden',
+    alignItems: 'flex-end',
+  },
+  progressFill: { height: '100%', borderRadius: 2 },
+  hudFooter: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  hudMeta: { fontFamily: fonts.medium, fontSize: 12, color: '#D8C2AE' },
+  hudPhase: { fontFamily: fonts.semibold, fontSize: 11.5 },
+  fab: { position: 'absolute', left: 14, bottom: 38 },
+  sheet: {
+    marginTop: -24,
+    paddingTop: 10,
+    paddingHorizontal: 16,
+    gap: 16,
+    backgroundColor: colors.sheet,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    shadowColor: '#1A120E',
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: -6 },
+    elevation: 8,
+  },
+  handle: {
+    alignSelf: 'center',
+    width: 38,
+    height: 4.5,
+    borderRadius: 3,
+    backgroundColor: colors.lineStrong,
+    marginBottom: 2,
+  },
+  section: { gap: 12 },
+  sectionHeader: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  sectionTitle: { fontFamily: fonts.bold, fontSize: 20, color: colors.ink, textAlign: 'right' },
+  summaryPill: {
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 999,
+    backgroundColor: colors.sandSoft,
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
+  summaryPillText: { fontFamily: fonts.medium, fontSize: 12, color: colors.muted },
+  loadingCard: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    padding: 18,
+    borderRadius: 18,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
+  notice: {
+    padding: 14,
+    backgroundColor: colors.sandSoft,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: colors.lineStrong,
+    gap: 10,
+    alignItems: 'flex-end',
+  },
+  noticeCompact: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+    paddingVertical: 9,
+    paddingHorizontal: 13,
+    backgroundColor: colors.sandSoft,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
+  noticeCompactText: { flex: 1, fontSize: 13 },
+  compactBtn: {
+    minHeight: 34,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    backgroundColor: colors.obsidian,
+    justifyContent: 'center',
+  },
+  compactBtnText: { fontFamily: fonts.semibold, fontSize: 12.5, color: '#FFF7ED' },
   noticeText: { fontFamily: fonts.regular, fontSize: 14, color: colors.inkSoft, textAlign: 'right' },
   // Technical reason in English (server and HTTP status), so a screenshot tells us what failed.
   errorDetail: { fontFamily: fonts.regular, fontSize: 11, color: colors.muted, textAlign: 'left', alignSelf: 'stretch' },
-  button: { minHeight: 44, paddingHorizontal: 18, justifyContent: 'center', backgroundColor: colors.ink, borderRadius: 14 },
-  buttonText: { fontFamily: fonts.semibold, fontSize: 15, color: colors.ground },
-  muted: { fontFamily: fonts.regular, fontSize: 15, color: colors.muted, textAlign: 'center' },
-  section: { gap: 12 },
-  sectionTitle: { fontFamily: fonts.bold, fontSize: 20, color: colors.ink, textAlign: 'right' },
-  soon: { fontFamily: fonts.regular, fontSize: 13, color: colors.muted, textAlign: 'center' },
+  button: { minHeight: 42, paddingHorizontal: 16, justifyContent: 'center', backgroundColor: colors.obsidian, borderRadius: 12 },
+  buttonText: { fontFamily: fonts.semibold, fontSize: 14, color: '#FFF7ED' },
+  muted: { fontFamily: fonts.regular, fontSize: 14.5, color: colors.muted, textAlign: 'center' },
+  soon: { fontFamily: fonts.regular, fontSize: 12.5, color: colors.muted, textAlign: 'center' },
+  attribution: { fontFamily: fonts.regular, fontSize: 11, color: colors.mutedSoft, textAlign: 'center', paddingTop: 4 },
 });
