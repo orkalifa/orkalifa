@@ -21,7 +21,13 @@
       "package": "com.orkalifa.sunsetspots"
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/favicon.png",
+      "output": "single",
+      "name": "Spotlight",
+      "shortName": "Spotlight",
+      "lang": "he",
+      "themeColor": "#2A1A12",
+      "backgroundColor": "#FFF4E6"
     },
     "plugins": [
       "expo-router",
@@ -34,6 +40,9 @@
       ],
       "expo-status-bar"
     ],
-    "scheme": "sunsetspots"
+    "scheme": "sunsetspots",
+    "experiments": {
+      "baseUrl": "/orkalifa"
+    }
   }
 }
