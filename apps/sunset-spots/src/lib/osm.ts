@@ -1,6 +1,16 @@
 import { distanceMeters, type LatLon } from './geo.ts';
 
-export type SpotKind = 'viewpoint' | 'peak' | 'picnic' | 'bench' | 'shelter';
+/** `mine`: a place the user saved themselves (lib/myspots.ts), never from OpenStreetMap. */
+export type SpotKind = 'viewpoint' | 'peak' | 'picnic' | 'bench' | 'shelter' | 'mine';
+
+export const KIND_LABEL: Record<SpotKind, string> = {
+  viewpoint: 'נקודת תצפית',
+  peak: 'פסגה',
+  picnic: 'פינת פיקניק',
+  bench: 'ספסל',
+  shelter: 'סככה',
+  mine: 'המקום שלי',
+};
 
 export type Candidate = LatLon & {
   id: string;
@@ -153,7 +163,7 @@ export function parseOverpass(json: { elements?: OverpassElement[] }): Candidate
 }
 
 // Higher wins when two candidates sit on the same spot.
-const KIND_RANK: Record<SpotKind, number> = { viewpoint: 5, peak: 4, picnic: 3, shelter: 2, bench: 1 };
+const KIND_RANK: Record<SpotKind, number> = { mine: 6, viewpoint: 5, peak: 4, picnic: 3, shelter: 2, bench: 1 };
 
 /**
  * Collapses candidates closer than `radiusMeters` into one spot (a row of benches is one place),

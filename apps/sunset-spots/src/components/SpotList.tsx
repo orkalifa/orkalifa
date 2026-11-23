@@ -1,19 +1,11 @@
 import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle, Path, Text as SvgText } from 'react-native-svg';
 import { formatDistance } from '../lib/geo';
-import type { SpotKind } from '../lib/osm';
+import { KIND_LABEL } from '../lib/osm';
 import type { ScoredSpot } from '../lib/score';
 import { travelMinutes, type ShownSpot } from '../lib/travel';
 import { colors, fonts } from '../theme';
 import { SpotPin } from './SpotPin';
-
-const KIND_LABEL: Record<SpotKind, string> = {
-  viewpoint: 'נקודת תצפית',
-  peak: 'פסגה',
-  picnic: 'פינת פיקניק',
-  bench: 'ספסל',
-  shelter: 'סככה',
-};
 
 function openWaze(spot: ScoredSpot) {
   Linking.openURL(`https://waze.com/ul?ll=${spot.lat},${spot.lon}&navigate=yes`);

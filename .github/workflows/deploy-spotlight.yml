@@ -35,12 +35,11 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run typecheck
-      - run: npx expo export -p web
+      # Export + icons, manifest, offline service worker, link previews (scripts/web-postbuild.mjs).
+      - run: npm run build:web
         env:
           CI: 1
           EXPO_OFFLINE: 1
-      # Single-page app: serve index.html for unknown paths too.
-      - run: cp dist/index.html dist/404.html && touch dist/.nojekyll
       - uses: actions/upload-pages-artifact@v3
         with:
           path: apps/sunset-spots/dist

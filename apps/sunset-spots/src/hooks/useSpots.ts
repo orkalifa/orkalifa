@@ -18,17 +18,14 @@ function isInIsrael(coords: Coords): boolean {
   return lat >= IL_BOUNDS.south && lat <= IL_BOUNDS.north && lon >= IL_BOUNDS.west && lon <= IL_BOUNDS.east;
 }
 
-// Lazily load bundled data only once.
-let _bundled: Spot[] | null = null;
-function getBundledSpots(): Spot[] {
-  if (_bundled === null) {
-    try {
-      _bundled = require('../data/spots-il.json') as Spot[];
-    } catch {
-      _bundled = [];
-    }
-  }
-  return _bundled;
+// The bundled spots (~1 MB) load on their own, after the map: a dynamic import becomes a separate
+// file on the web, so the first screen doesn't wait for it. Loaded once, then kept.
+let bundled: Promise<Spot[]> | null = null;
+function loadBundledSpots(): Promise<Spot[]> {
+  bundled ??= import('../data/spots-il.json').then(
+    (m) => ((m as { default?: unknown }).default ?? m) as Spot[],
+  );
+  return bundled;
 }
 
 /** Filter bundled spots to those within radiusMeters of center. */
@@ -48,12 +45,20 @@ export function useSpots(coords: Coords | null) {
     if (lat === undefined || lon === undefined) return;
 
     if (inIsrael) {
-      // Use bundled data for Israel – wrap in microtask to avoid sync setState in effect body.
-      void Promise.resolve().then(() => {
-        const nearby = filterByRadius(getBundledSpots(), { lat, lon }, RADIUS_METERS);
-        setState({ status: 'ready', spots: mergeNearby(nearby) });
-      });
-      return;
+      let current = true;
+      loadBundledSpots()
+        .then((all) => {
+          if (!current) return;
+          const nearby = filterByRadius(all, { lat, lon }, RADIUS_METERS);
+          setState({ status: 'ready', spots: mergeNearby(nearby) });
+        })
+        .catch((error: unknown) => {
+          bundled = null; // try again on retry
+          if (current) setState({ status: 'error', message: error instanceof Error ? error.message : String(error) });
+        });
+      return () => {
+        current = false;
+      };
     }
 
     // Fallback to live Overpass query outside Israel

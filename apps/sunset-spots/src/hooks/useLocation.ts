@@ -24,13 +24,29 @@ async function locate(): Promise<LocationState> {
   }
 }
 
+/**
+ * Don't wait forever: on the web an unanswered permission prompt (or a phone without a fix) would
+ * leave the app on "מחפש את המיקום שלך" indefinitely. After this long, show the fallback instead;
+ * "נסה שוב" asks again.
+ */
+const LOCATE_TIMEOUT_MS = 12000;
+
+function locateWithTimeout(): Promise<LocationState> {
+  return Promise.race([
+    locate(),
+    new Promise<LocationState>((resolve) =>
+      setTimeout(() => resolve({ status: 'fallback', coords: FALLBACK, reason: 'error' }), LOCATE_TIMEOUT_MS),
+    ),
+  ]);
+}
+
 export function useLocation() {
   const [state, setState] = useState<LocationState>({ status: 'loading' });
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
-    locate().then((next) => {
+    locateWithTimeout().then((next) => {
       if (!cancelled) setState(next);
     });
     return () => {

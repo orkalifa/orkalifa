@@ -44,7 +44,8 @@ function withinArc(bearing: number, arc: { from: number; to: number }, slack: nu
 
 const clamp = (n: number) => Math.max(0, Math.min(100, Math.round(n)));
 
-const BASE_VIEW: Record<SpotKind, number> = { viewpoint: 85, peak: 80, picnic: 60, shelter: 55, bench: 55 };
+// A place you saved yourself is one you already know is good for the sunset.
+const BASE_VIEW: Record<SpotKind, number> = { viewpoint: 85, peak: 80, picnic: 60, shelter: 55, bench: 55, mine: 90 };
 
 /**
  * Scores a spot for tonight. `viewWeight` is the "comfort ↔ view" slider: 0 = only comfort, 1 = only view.
@@ -79,6 +80,7 @@ export function scoreSpot(
   }
   if (spot.kind === 'viewpoint') reasons.push('נקודת תצפית');
   if (spot.kind === 'peak') reasons.push('פסגה');
+  if (spot.kind === 'mine') reasons.push('המקום שלך');
 
   const distance = distanceMeters(from, spot);
   const km = distance / 1000;
@@ -98,6 +100,7 @@ export function scoreSpot(
   }
   if (spot.tags.backrest === 'yes') pleasant += 5;
   if (spot.name) pleasant += 5;
+  if (spot.kind === 'mine') pleasant += 20;
 
   const v = clamp(view);
   const a = clamp(access);

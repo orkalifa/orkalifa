@@ -9,6 +9,7 @@ export const ICON_PATHS: Record<SpotKind, string> = {
   picnic: 'M5 8h14M8 8l-3 11M16 8l3 11M6 14h12',
   bench: 'M4 10h16M4 14h16M6 14v5M18 14v5',
   shelter: 'M3 11l9-6 9 6M6 11v8M18 11v8',
+  mine: 'M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z',
 };
 
 export const PIN_PATH = 'M20 48C20 48 4 31 4 19A16 16 0 1 1 36 19C36 31 20 48 20 48Z';

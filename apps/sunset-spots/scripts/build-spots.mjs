@@ -26,6 +26,15 @@ function buildIsraelQuery() {
   return `[out:json][timeout:25];(${parts});out center tags;`;
 }
 
+// Only the tags the app reads (score.ts); the rest would just make the download bigger.
+const KEPT_TAGS = ['direction', 'wheelchair', 'covered', 'backrest'];
+
+function keptTags(tags) {
+  const out = {};
+  for (const k of KEPT_TAGS) if (tags[k] !== undefined) out[k] = tags[k];
+  return out;
+}
+
 function kindOf(tags) {
   if (tags.tourism === 'viewpoint') return 'viewpoint';
   if (tags.natural === 'peak') return 'peak';
@@ -59,14 +68,16 @@ async function fetchIsraelSpots() {
     const lat = el.lat ?? el.center?.lat;
     const lon = el.lon ?? el.center?.lon;
     if (!kind || lat === undefined || lon === undefined) continue;
-    spots.push({
+    const spot = {
       id: `${el.type}/${el.id}`,
       kind,
-      name: tags['name:he'] ?? tags.name ?? null,
       lat: Number(lat.toFixed(5)),
       lon: Number(lon.toFixed(5)),
-      tags,
-    });
+      tags: keptTags(tags),
+    };
+    const name = tags['name:he'] ?? tags.name;
+    if (name) spot.name = name;
+    spots.push(spot);
   }
   return spots;
 }
@@ -77,7 +88,7 @@ async function main() {
   const outDir = path.resolve('src/data');
   await mkdir(outDir, { recursive: true });
   const outPath = path.join(outDir, 'spots-il.json');
-  await writeFile(outPath, JSON.stringify(spots, null, 2), 'utf8');
+  await writeFile(outPath, JSON.stringify(spots), 'utf8');
   const sizeMiB = (Buffer.byteLength(JSON.stringify(spots)) / 1024 / 1024).toFixed(2);
   console.log(`Wrote ${spots.length} spots to ${outPath} (${sizeMiB} MiB)`);
 }

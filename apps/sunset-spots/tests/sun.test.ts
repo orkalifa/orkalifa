@@ -123,3 +123,14 @@ test('golden hour, sunset and bearing agree with NOAA across the year and the co
     }
   }
 });
+
+test('golden hour, sunset and blue hour come in order, minutes apart', () => {
+  const info = getSunsetInfo(LAT, LON, new Date('2026-11-22T09:00:00Z'));
+  assert.ok(info);
+  const t = [info.goldenHour, info.sunset, info.blueHour, info.blueHourEnd].map((d) => d.getTime());
+  for (let i = 1; i < t.length; i++) assert.ok(t[i] > t[i - 1], `event ${i} out of order`);
+  const min = (ms: number) => ms / 60000;
+  // In Israel the sun sinks fast: ~15–20 min from sunset to -4°, and the blue hour is ~8–12 min.
+  assert.ok(min(t[2] - t[1]) > 10 && min(t[2] - t[1]) < 25, `sunset→blue ${min(t[2] - t[1])}`);
+  assert.ok(min(t[3] - t[2]) > 5 && min(t[3] - t[2]) < 15, `blue hour ${min(t[3] - t[2])}`);
+});

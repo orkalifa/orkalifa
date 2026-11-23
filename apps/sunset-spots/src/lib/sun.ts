@@ -1,4 +1,9 @@
-import { getPosition, getTimes } from 'suncalc';
+import { addTime, getPosition, getTimes, times as sunTimes } from 'suncalc';
+
+// Photographers' evening light: golden hour runs from the sun at +6° down to -4°, then the blue
+// hour from -4° to -6° (civil dusk). SunCalc already knows +6° (goldenHour) and -6° (dusk).
+const BLUE_START = 'blueHourStart';
+if (!sunTimes.some(([, , evening]) => evening === BLUE_START)) addTime(-4, 'blueHourEndMorning', BLUE_START);
 
 export type SunsetInfo = {
   /** The next sunset: today's if it hasn't happened yet, otherwise tomorrow's. */
@@ -8,6 +13,10 @@ export type SunsetInfo = {
   /** Compass bearing of the sun at sunset, degrees clockwise from true north. */
   bearing: number;
   isTomorrow: boolean;
+  /** End of the golden hour and start of the blue hour (sun 4° below the horizon). */
+  blueHour: Date;
+  /** End of the blue hour (civil dusk, sun 6° below the horizon). */
+  blueHourEnd: Date;
 };
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -24,11 +33,12 @@ export function getSunsetInfo(lat: number, lon: number, now: Date = new Date()):
     times = getTimes(new Date(now.getTime() + DAY_MS), lat, lon);
     isTomorrow = true;
   }
-  const { sunset, goldenHour } = times;
-  if (!sunset || !goldenHour) return null;
+  const { sunset, goldenHour, dusk } = times;
+  const blueHour = times[BLUE_START];
+  if (!sunset || !goldenHour || !dusk || !(blueHour instanceof Date)) return null;
   // SunCalc 2.x reports azimuth in degrees, clockwise from north.
   const { azimuth } = getPosition(sunset, lat, lon);
-  return { sunset, goldenHour, bearing: normalizeBearing(azimuth), isTomorrow };
+  return { sunset, goldenHour, bearing: normalizeBearing(azimuth), isTomorrow, blueHour, blueHourEnd: dusk };
 }
 
 // Eight points are plenty to know which way to face, and short enough to read at a glance.

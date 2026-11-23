@@ -2,19 +2,11 @@ import { Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'r
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Defs, LinearGradient, Path, RadialGradient, Rect, Stop, Text as SvgText } from 'react-native-svg';
 import { formatDistance } from '../lib/geo';
-import type { SpotKind } from '../lib/osm';
+import { KIND_LABEL } from '../lib/osm';
 import { bearingToHebrew, formatClock } from '../lib/sun';
 import { travelMinutes, type ShownSpot } from '../lib/travel';
 import { colors, fonts } from '../theme';
 import { SpotPin } from './SpotPin';
-
-const KIND_LABEL: Record<SpotKind, string> = {
-  viewpoint: 'נקודת תצפית',
-  peak: 'פסגה',
-  picnic: 'פינת פיקניק',
-  bench: 'ספסל',
-  shelter: 'סככה',
-};
 
 type Props = {
   spot: ShownSpot | null;
@@ -24,6 +16,11 @@ type Props = {
   bearing: number;
   onClose: () => void;
   onOpenCompass: () => void;
+  onShare: () => void;
+  /** Shown after sharing: "הקישור הועתק" and the like. */
+  shareNote?: string | null;
+  /** Only for your own spots. */
+  onDelete?: () => void;
 };
 
 function openWaze(spot: ShownSpot) {
@@ -31,7 +28,7 @@ function openWaze(spot: ShownSpot) {
 }
 
 /** Slide-up detail sheet for a selected spot: bespoke horizon mood art, 3 score rings, ETA and navigation. */
-export function SpotDetailSheet({ spot, now, sunset, goldenHour, bearing, onClose, onOpenCompass }: Props) {
+export function SpotDetailSheet({ spot, now, sunset, goldenHour, bearing, onClose, onOpenCompass, onShare, shareNote, onDelete }: Props) {
   const insets = useSafeAreaInsets();
   if (!spot) return null;
 
@@ -107,6 +104,14 @@ export function SpotDetailSheet({ spot, now, sunset, goldenHour, bearing, onClos
                 </View>
               </View>
             )}
+
+            {shareNote && <Text style={styles.shareNote}>{shareNote}</Text>}
+
+            {onDelete && (
+              <Pressable onPress={onDelete} style={styles.deleteBtn} accessibilityRole="button" accessibilityLabel={`מחיקת ${title} מהמקומות שלי`}>
+                <Text style={styles.deleteText}>מחיקה מהמקומות שלי</Text>
+              </Pressable>
+            )}
           </ScrollView>
 
           <View style={styles.actions}>
@@ -137,6 +142,18 @@ export function SpotDetailSheet({ spot, now, sunset, goldenHour, bearing, onClos
                 <Path d="M12 18.5l-2.8-6.5h5.6z" fill={colors.inkSoft} />
               </Svg>
               <Text style={styles.secondaryBtnText}>מצפן</Text>
+            </Pressable>
+
+            <Pressable
+              onPress={onShare}
+              style={({ pressed }) => [styles.secondaryBtn, pressed && styles.pressed]}
+              accessibilityRole="button"
+              accessibilityLabel={`שיתוף קישור אל ${title}`}
+            >
+              <Svg width={19} height={19} viewBox="0 0 24 24" fill="none">
+                <Path d="M12 3v12M7 8l5-5 5 5M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6" stroke={colors.ink} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+              </Svg>
+              <Text style={styles.secondaryBtnText}>שתף</Text>
             </Pressable>
           </View>
         </View>
@@ -329,7 +346,7 @@ const styles = StyleSheet.create({
   primaryBtnText: { fontFamily: fonts.semibold, fontSize: 16, color: '#FFF7ED' },
   secondaryBtn: {
     minHeight: 52,
-    paddingHorizontal: 18,
+    paddingHorizontal: 14,
     borderRadius: 16,
     backgroundColor: colors.surface,
     borderWidth: 1,
@@ -340,5 +357,8 @@ const styles = StyleSheet.create({
     gap: 7,
   },
   secondaryBtnText: { fontFamily: fonts.semibold, fontSize: 15, color: colors.ink },
+  shareNote: { fontFamily: fonts.medium, fontSize: 13, color: colors.sage, textAlign: 'center' },
+  deleteBtn: { alignSelf: 'center', paddingVertical: 8, paddingHorizontal: 12 },
+  deleteText: { fontFamily: fonts.medium, fontSize: 13.5, color: colors.orangeText },
   pressed: { opacity: 0.85, transform: [{ scale: 0.985 }] },
 });

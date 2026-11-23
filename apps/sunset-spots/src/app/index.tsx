@@ -1,19 +1,28 @@
-import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { useMemo, useState } from 'react';
+import { useLocalSearchParams } from 'expo-router';
+import { Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Path } from 'react-native-svg';
+import { AddSpotSheet } from '../components/AddSpotSheet';
 import { CompassButton, CompassSheet } from '../components/CompassSheet';
 import { SpotDetailSheet } from '../components/SpotDetailSheet';
 import { SpotList } from '../components/SpotList';
 import { SpotMap } from '../components/SpotMap';
+import { TwilightCard } from '../components/TwilightCard';
 import { useHorizons } from '../hooks/useHorizons';
 import { useLocation } from '../hooks/useLocation';
 import { useMapLayers } from '../hooks/useMapLayers';
+import { useMySpots } from '../hooks/useMySpots';
 import { useNow } from '../hooks/useNow';
 import { usePlaceName } from '../hooks/usePlaceName';
 import { useSpots } from '../hooks/useSpots';
+import { distanceMeters } from '../lib/geo';
 import { mapRange } from '../lib/mapview';
-import { rankSpots } from '../lib/score';
+import { isMine, toSpot } from '../lib/myspots';
+import type { Spot } from '../lib/osm';
+import { rankSpots, scoreSpot } from '../lib/score';
+import { parseSharedSpot } from '../lib/share';
+import { shareSpot } from '../lib/shareSpot';
 import { bearingToHebrew, formatClock, formatCountdown, getSunsetInfo } from '../lib/sun';
 import { withReach, type ShownSpot } from '../lib/travel';
 import { colors, fonts, getSkyPhase } from '../theme';
@@ -27,6 +36,8 @@ const MAP_SHARE = 0.6;
 const VIEW_WEIGHT = 0.4;
 /** Space the floating sunset HUD takes over the top of the map, below the status bar. */
 const HUD_SPACE = 112;
+/** Your own saved spots show up when they're this close, even if they aren't in the top six. */
+const MY_SPOTS_RADIUS_M = 25000;
 
 export default function SunsetScreen() {
   const { state, retry } = useLocation();
@@ -35,24 +46,59 @@ export default function SunsetScreen() {
   const { height: windowHeight } = useWindowDimensions();
   const coords = state.status === 'loading' ? null : state.coords;
   const spots = useSpots(coords);
+  const mySpots = useMySpots();
+  // A shared link (?spot=…&ll=…) opens straight on that spot's card.
+  const shared = parseSharedSpot(useLocalSearchParams());
   const place = usePlaceName(state.status === 'ready' ? state.coords : null);
   const info = coords ? getSunsetInfo(coords.latitude, coords.longitude, now) : null;
-  const horizons = useHorizons(spots.state.status === 'ready' ? spots.state.spots : null, coords, info?.bearing ?? null);
+  const lat = coords?.latitude;
+  const lon = coords?.longitude;
+  // Memoised: the terrain check refetches whenever this list changes.
+  const pool = useMemo<Spot[] | null>(() => {
+    if (spots.state.status !== 'ready' || lat === undefined || lon === undefined) return null;
+    const mine = mySpots.spots.map(toSpot).filter((s) => distanceMeters(s, { lat, lon }) <= MY_SPOTS_RADIUS_M);
+    return [...spots.state.spots, ...mine];
+  }, [spots.state, mySpots.spots, lat, lon]);
+  const horizons = useHorizons(pool, coords, info?.bearing ?? null);
   const [compassOpen, setCompassOpen] = useState(false);
-  const [selectedSpotId, setSelectedSpotId] = useState<string | null>(null);
+  const [addOpen, setAddOpen] = useState(false);
+  const [selectedSpotId, setSelectedSpotId] = useState<string | null>(() => shared?.id ?? null);
+  const [shareNote, setShareNote] = useState<string | null>(null);
 
-  const ranked =
-    coords && info && spots.state.status === 'ready'
-      ? withReach(
-          rankSpots(spots.state.spots, { lat: coords.latitude, lon: coords.longitude }, info.bearing, VIEW_WEIGHT, horizons.horizons).slice(0, 6),
-          'car',
-          now,
-          info.goldenHour,
-          info.sunset,
-        )
-      : null;
+  let ranked: ShownSpot[] | null = null;
+  if (coords && info && pool) {
+    const scored = rankSpots(pool, { lat: coords.latitude, lon: coords.longitude }, info.bearing, VIEW_WEIGHT, horizons.horizons);
+    const top = scored.slice(0, 6);
+    const moreOfMine = scored.filter((s) => isMine(s) && !top.includes(s));
+    ranked = withReach([...top, ...moreOfMine], 'car', now, info.goldenHour, info.sunset);
+  }
 
-  const selectedSpot: ShownSpot | null = ranked?.find((s) => s.id === selectedSpotId) ?? null;
+  // A shared spot that isn't in your list (far away, or someone else's own place) is scored from here.
+  let sharedShown: ShownSpot | null = null;
+  if (shared && coords && info && !ranked?.some((s) => s.id === shared.id)) {
+    const ownedHere = mySpots.spots.some((s) => s.id === shared.id);
+    const spot: Spot = {
+      ...shared,
+      // Someone else's own place isn't "yours" here.
+      kind: shared.kind === 'mine' && !ownedHere ? 'viewpoint' : shared.kind,
+      tags: {},
+      nearby: [],
+    };
+    const scored = scoreSpot(spot, { lat: coords.latitude, lon: coords.longitude }, info.bearing, VIEW_WEIGHT, horizons.horizons[spot.id]);
+    sharedShown = withReach([scored], 'car', now, info.goldenHour, info.sunset)[0];
+  }
+
+  const selectedSpot: ShownSpot | null =
+    ranked?.find((s) => s.id === selectedSpotId) ?? (sharedShown?.id === selectedSpotId ? sharedShown : null);
+  const selectedIsMine = !!selectedSpot && mySpots.spots.some((s) => s.id === selectedSpot.id);
+
+  const closeSpot = () => {
+    setSelectedSpotId(null);
+    setShareNote(null);
+    // Drop the shared link from the address bar, so a reload doesn't open it again. Not a navigation:
+    // that would remount the screen and look up your location all over again.
+    if (shared && Platform.OS === 'web') globalThis.history?.replaceState(null, '', globalThis.location.pathname);
+  };
 
   // The map's zoom: it fits the shown spots, or a close-up until they're in. The tiles are fetched for the same range.
   const range = mapRange((ranked ?? []).map((s) => s.distance));
@@ -176,6 +222,15 @@ export default function SunsetScreen() {
             </View>
           )}
 
+          <TwilightCard
+            now={now}
+            goldenHour={info.goldenHour}
+            sunset={info.sunset}
+            blueHour={info.blueHour}
+            blueHourEnd={info.blueHourEnd}
+            isTomorrow={info.isTomorrow}
+          />
+
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>מקומות לשקיעה סביבך</Text>
@@ -227,6 +282,17 @@ export default function SunsetScreen() {
               />
             )}
 
+            {spots.state.status === 'ready' && (
+              <Pressable
+                onPress={() => setAddOpen(true)}
+                style={({ pressed }) => [styles.addCard, pressed && { opacity: 0.8 }]}
+                accessibilityRole="button"
+              >
+                <Text style={styles.addTitle}>★ לשמור את המקום הזה</Text>
+                <Text style={styles.addBody}>מקום טוב לשקיעה שלא מופיע פה? שומרים את המיקום הנוכחי בלחיצה.</Text>
+              </Pressable>
+            )}
+
             {spots.state.status === 'ready' && horizons.status === 'idle' && (
               <Text style={styles.soon}>בודק את קו האופק לכיוון השקיעה…</Text>
             )}
@@ -248,13 +314,42 @@ export default function SunsetScreen() {
         onClose={() => setCompassOpen(false)}
       />
 
+      <AddSpotSheet
+        visible={addOpen}
+        canSave={state.status === 'ready'}
+        onClose={() => setAddOpen(false)}
+        onSave={(name) => {
+          const saved = mySpots.add(name, latitude, longitude);
+          setAddOpen(false);
+          setSelectedSpotId(saved.id);
+        }}
+      />
+
       <SpotDetailSheet
         spot={selectedSpot}
         now={now}
         sunset={info.sunset}
         goldenHour={info.goldenHour}
         bearing={info.bearing}
-        onClose={() => setSelectedSpotId(null)}
+        onClose={closeSpot}
+        onShare={() => {
+          if (!selectedSpot) return;
+          const { id, kind, lat: sLat, lon: sLon, name } = selectedSpot;
+          shareSpot({ id, kind, lat: sLat, lon: sLon, name }, sunsetClock, info.isTomorrow).then((result) =>
+            setShareNote(
+              result === 'copied' ? 'הקישור הועתק. אפשר להדביק אותו בוואטסאפ.' : result === 'failed' ? 'השיתוף לא הצליח. נסו שוב.' : null,
+            ),
+          );
+        }}
+        shareNote={shareNote}
+        onDelete={
+          selectedIsMine
+            ? () => {
+                mySpots.remove(selectedSpot.id);
+                closeSpot();
+              }
+            : undefined
+        }
         // iOS can't present a modal while another is still sliding away, so wait for the spot sheet to close.
         onOpenCompass={() => setTimeout(() => setCompassOpen(true), 400)}
       />
@@ -422,6 +517,18 @@ const styles = StyleSheet.create({
   button: { minHeight: 42, paddingHorizontal: 16, justifyContent: 'center', backgroundColor: colors.obsidian, borderRadius: 12 },
   buttonText: { fontFamily: fonts.semibold, fontSize: 14, color: '#FFF7ED' },
   muted: { fontFamily: fonts.regular, fontSize: 14.5, color: colors.muted, textAlign: 'center' },
+  addCard: {
+    padding: 14,
+    gap: 4,
+    borderRadius: 18,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderColor: colors.lineStrong,
+    backgroundColor: colors.sandSoft,
+    alignItems: 'flex-end',
+  },
+  addTitle: { fontFamily: fonts.semibold, fontSize: 15, color: colors.ink, textAlign: 'right' },
+  addBody: { fontFamily: fonts.regular, fontSize: 13, color: colors.muted, textAlign: 'right' },
   soon: { fontFamily: fonts.regular, fontSize: 12.5, color: colors.muted, textAlign: 'center' },
   attribution: { fontFamily: fonts.regular, fontSize: 11, color: colors.mutedSoft, textAlign: 'center', paddingTop: 4 },
 });
