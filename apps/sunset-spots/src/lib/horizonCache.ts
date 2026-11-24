@@ -12,6 +12,8 @@ export const MAX_AGE_MS = 42 * 24 * 60 * 60 * 1000;
 export const MAX_ENTRIES = 400;
 /** After a failed fetch, don't retry the same spots for this long (avoids a retry loop). */
 export const FAILED_RETRY_MS = 60 * 1000;
+/** Most failure records kept; older ones are dropped first. */
+export const MAX_FAILED = 500;
 
 export type HorizonCache = { v: 1; entries: Record<string, { h: Horizon; t: number }> };
 export type CacheSpot = LatLon & { id: string; kind?: string };
@@ -124,6 +126,22 @@ export function planFetch<S extends CacheSpot>(
     else toFetch.push(s);
   }
   return { toFetch, waiting, failed };
+}
+
+/**
+ * Record that the fetch for `keys` failed at `now`. Entries whose backoff is over (or stamped in the
+ * future) are pruned first, and only the newest MAX_FAILED are kept, so the map can't grow forever.
+ */
+export function recordFailures(failedAt: Map<string, number>, keys: string[], now: number): void {
+  for (const [k, t] of failedAt) if (t > now || now - t >= FAILED_RETRY_MS) failedAt.delete(k);
+  for (const k of keys) {
+    failedAt.delete(k); // re-insert so Map order stays oldest-first
+    failedAt.set(k, now);
+  }
+  for (const k of failedAt.keys()) {
+    if (failedAt.size <= MAX_FAILED) break;
+    failedAt.delete(k);
+  }
 }
 
 /** State after a round: on success cached + fetched; on error the earlier results are kept, not wiped. */

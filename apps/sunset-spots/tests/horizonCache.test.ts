@@ -5,12 +5,14 @@ import {
   FAILED_RETRY_MS,
   MAX_AGE_MS,
   MAX_ENTRIES,
+  MAX_FAILED,
   emptyHorizonCache,
   horizonCacheKey,
   horizonsAfterFetch,
   lookupHorizons,
   parseHorizonCache,
   planFetch,
+  recordFailures,
   storeHorizons,
 } from '../src/lib/horizonCache.ts';
 
@@ -123,4 +125,34 @@ test('an error keeps the horizons already known', () => {
   const ok = horizonsAfterFetch({ old: OPEN }, { b: SEA }, { ok: true, horizons: { a: OPEN } });
   assert.equal(ok.status, 'ready');
   assert.deepEqual(ok.horizons, { a: OPEN, b: SEA });
+});
+
+test('planFetch: once the backoff is over, a failed spot is fetched again', () => {
+  const failedAt = new Map([[horizonCacheKey(A, 259), NOW]]);
+  assert.deepEqual(planFetch([A], 259, new Set(), failedAt, NOW + FAILED_RETRY_MS - 1).failed, [A]);
+  assert.deepEqual(planFetch([A], 259, new Set(), failedAt, NOW + FAILED_RETRY_MS).toFetch, [A]);
+});
+
+test('recordFailures prunes expired and future entries and keeps the rest', () => {
+  const failedAt = new Map([
+    ['old', NOW - FAILED_RETRY_MS],
+    ['recent', NOW - 1000],
+    ['future', NOW + 1000],
+  ]);
+  recordFailures(failedAt, ['a|259', 'b|259'], NOW);
+  assert.deepEqual([...failedAt.keys()].sort(), ['a|259', 'b|259', 'recent']);
+  assert.equal(failedAt.get('a|259'), NOW);
+
+  // A repeated failure refreshes its stamp.
+  recordFailures(failedAt, ['recent'], NOW + 10);
+  assert.equal(failedAt.get('recent'), NOW + 10);
+});
+
+test('recordFailures caps the map at MAX_FAILED, dropping the oldest', () => {
+  const failedAt = new Map<string, number>();
+  for (let i = 0; i < MAX_FAILED; i++) failedAt.set(`s${i}`, NOW - 2000 + i / 1000);
+  recordFailures(failedAt, ['new1', 'new2'], NOW);
+  assert.equal(failedAt.size, MAX_FAILED);
+  assert.ok(!failedAt.has('s0') && !failedAt.has('s1'), 'oldest dropped');
+  assert.ok(failedAt.has('new1') && failedAt.has('new2') && failedAt.has(`s${MAX_FAILED - 1}`));
 });

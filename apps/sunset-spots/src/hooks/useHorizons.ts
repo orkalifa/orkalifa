@@ -2,12 +2,14 @@ import { useEffect, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { fetchHorizons } from '../lib/horizon';
 import {
+  FAILED_RETRY_MS,
   HORIZON_CACHE_KEY,
   horizonCacheKey,
   horizonsAfterFetch,
   lookupHorizons,
   parseHorizonCache,
   planFetch,
+  recordFailures,
   storeHorizons,
   type HorizonCache,
   type HorizonsState,
@@ -42,11 +44,26 @@ function loadCache(): Promise<HorizonCache> {
 
 const notify = () => listeners.forEach((l) => l());
 
+// One shared timer: when the failure backoff is over, wake the hooks so they plan again.
+let retryTimer: ReturnType<typeof setTimeout> | null = null;
+function scheduleRetry() {
+  if (retryTimer) return;
+  retryTimer = setTimeout(() => {
+    retryTimer = null;
+    notify();
+  }, FAILED_RETRY_MS + 1000);
+}
+function cancelRetry() {
+  if (retryTimer) clearTimeout(retryTimer);
+  retryTimer = null;
+}
+
 /**
  * Terrain horizon toward the sunset for the most promising spots. Results are cached on the device by
  * spot + whole-degree bearing (see `horizonCache.ts`), so only spots missing from the cache are fetched,
  * and a fetch already running is never started twice. While this loads, or if it fails with no results,
- * every spot keeps its provisional score. A failure keeps the horizons already known.
+ * every spot keeps its provisional score. A failure keeps the horizons already known,
+ * and the failed spots are tried again once FAILED_RETRY_MS is over.
  */
 export function useHorizons(spots: Spot[] | null, coords: Coords | null, bearing: number | null): HorizonsState {
   const [state, setState] = useState<HorizonsState>({ status: 'idle', horizons: {} });
@@ -60,6 +77,7 @@ export function useHorizons(spots: Spot[] | null, coords: Coords | null, bearing
     listeners.add(bump);
     return () => {
       listeners.delete(bump);
+      if (listeners.size === 0) cancelRetry();
     };
   }, []);
 
@@ -81,6 +99,7 @@ export function useHorizons(spots: Spot[] | null, coords: Coords | null, bearing
 
       if (toFetch.length === 0) {
         if (waiting.length > 0) return; // an earlier fetch will land and bump `version`
+        if (failed.length > 0) scheduleRetry();
         setState((prev) => horizonsAfterFetch(prev.horizons, hits, failed.length ? { ok: false } : { ok: true, horizons: {} }));
         return;
       }
@@ -95,8 +114,8 @@ export function useHorizons(spots: Spot[] | null, coords: Coords | null, bearing
         })
         .catch(() => {
           if (controller.signal.aborted) return;
-          const t = Date.now();
-          keys.forEach((k) => failedAt.set(k, t));
+          recordFailures(failedAt, keys, Date.now());
+          scheduleRetry();
         })
         .finally(() => {
           keys.forEach((k) => inFlight.delete(k));
