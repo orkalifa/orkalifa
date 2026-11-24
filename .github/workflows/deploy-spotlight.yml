@@ -53,3 +53,31 @@ jobs:
     steps:
       - id: deployment
         uses: actions/deploy-pages@v4
+
+  # Opens the live site in headless Chromium after every deploy and fails the run if it doesn't
+  # load, throws script errors, or doesn't show the sunset and the spots (scripts/smoke-live.mjs).
+  smoke:
+    needs: deploy
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/sunset-spots
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Playwright (outside the app, nothing saved)
+        run: |
+          npm i --no-save --no-audit --no-fund --prefix "$RUNNER_TEMP/pw" playwright@1.49.1
+          "$RUNNER_TEMP/pw/node_modules/.bin/playwright" install --with-deps chromium
+      - name: Smoke check the live site
+        run: node scripts/smoke-live.mjs
+        env:
+          PLAYWRIGHT_DIR: ${{ runner.temp }}/pw
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-failure
+          path: apps/sunset-spots/smoke-failure.png
+          if-no-files-found: ignore

@@ -27,25 +27,29 @@
 
 ---
 
-## 🏃 ספרינט 1 (מוצע): משימות בלי החלטה, שאפשר להריץ במקביל
+## 🏃 ספרינט 1 (אושר 2026-11-24)
+**גל 1 (במקביל):** S2, M1, U1, R2. **גל 2:** D1 ואחריה D2. כל השאר עוברות לספרינט 2.
 | # | סוכן | משימה | גודל | קבצים | מצב |
 |---|---|---|---|---|---|
-| M1 | map-data | הקשחת `build-spots.mjs`: לדחות `remark`, מינימום 8,000 מקומות, כתיבה דרך קובץ זמני, חותמת תאריך, `npm run build:spots` ובדיקה שקוראת את הקובץ האמיתי | S–M | scripts, tests | ⏳ מחכה לתוכנית |
-| M2 | map-data | Overpass: תשובה עם `remark` נחשבת כשל, ואז עוברים לשרת הבא | S | osm.ts | ⏳ מחכה לתוכנית |
-| S1 | sun-engine | מטמון אופק קבוע לפי מקום וכיוון. שגיאה לא מוחקת תוצאות קודמות | M | horizon.ts, useHorizons.ts | ⏳ מחכה לתוכנית |
-| S4 | sun-engine | בדיקות ל־`score.ts`, ל־`getEveningLight` (כולל שעון קיץ) ול־`geo.ts` | M | tests | ⏳ מחכה לתוכנית |
-| U1 | ui-ux | `useMemo` לדירוג ול־`mapSpots`. היום הם מחושבים כל שנייה ✓ | S | index.tsx | ⏳ מחכה לתוכנית |
-| U2 | ui-ux | `activeSheet` אחד במקום שרשראות `setTimeout(400)` | M | index.tsx, SpotDetailSheet | ⏳ מחכה לתוכנית |
-| D2 | user-data | `useLocation`: לשמור את הסיבה המקורית אחרי "נסה שוב", לנקות את הטיימר ולקבל מיקום שמגיע באיחור | S | useLocation.ts | ⏳ מחכה לתוכנית |
-| D5 | user-data | הקשחת קישור שיתוף: בדיוק שני מספרים, ניקוי תווי בקרה, בדיקות | S | share.ts, tests | ⏳ מחכה לתוכנית |
-| R2 | release | Service worker: גרסה לפי תוכן הקבצים, TileJSON דרך רשת קודם, הגבלת מטמון הנתונים ו־`waitUntil` | S | scripts | ⏳ מחכה לתוכנית |
-| D1 | user-data | עיגול לכ־100 מ' לכל מקום שמור שנשלח לבדיקת אופק, ותיקון ההערה ב־`myspots.ts` | S | horizon.ts (בתיאום עם sun-engine), myspots.ts | ⏳ מחכה לתוכנית |
-| S2 | sun-engine | עונש חזק על אופק חסום, וסימון "לא נבדק" | M | score.ts, useHorizons.ts | ⏳ מחכה לתוכנית |
-| R3 | release | CI: שלב lint, `cancel-in-progress: false`. תיקון `start.bat` ל־`npm.cmd` ו־`npx.cmd` | S | workflow, start.bat | ⏳ מחכה לתוכנית |
+| M1 | map-data | הקשחת `build-spots.mjs`: לדחות `remark`, מינימום 8,000 מקומות, כתיבה דרך קובץ זמני, חותמת תאריך, `npm run build:spots` ובדיקה שקוראת את הקובץ האמיתי | S–M | scripts, tests | 🟦 ספרינט 1 |
+| M2 | map-data | Overpass: תשובה עם `remark` נחשבת כשל, ואז עוברים לשרת הבא | S | osm.ts | ⏭️ ספרינט 2 |
+| S1 | sun-engine | מטמון אופק קבוע לפי מקום וכיוון. שגיאה לא מוחקת תוצאות קודמות | M | horizon.ts, useHorizons.ts | ⏭️ ספרינט 2 |
+| S4 | sun-engine | בדיקות ל־`score.ts`, ל־`getEveningLight` (כולל שעון קיץ) ול־`geo.ts` | M | tests | ⏭️ ספרינט 2 |
+| U1 | ui-ux | `useMemo` לדירוג ול־`mapSpots`. היום הם מחושבים כל שנייה ✓ | S | index.tsx | 🟦 ספרינט 1 |
+| U2 | ui-ux | `activeSheet` אחד במקום שרשראות `setTimeout(400)` | M | index.tsx, SpotDetailSheet | ⏭️ ספרינט 2 |
+| D2 | user-data | `useLocation`: לשמור את הסיבה המקורית אחרי "נסה שוב", לנקות את הטיימר ולקבל מיקום שמגיע באיחור | S | useLocation.ts | 🟦 ספרינט 1 |
+| D5 | user-data | הקשחת קישור שיתוף: בדיוק שני מספרים, ניקוי תווי בקרה, בדיקות | S | share.ts, tests | ⏭️ ספרינט 2 |
+| R2 | release | Service worker: גרסה לפי תוכן הקבצים, TileJSON דרך רשת קודם, הגבלת מטמון הנתונים ו־`waitUntil` | S | scripts | 🟦 ספרינט 1 |
+| D1 | user-data | עיגול לכ־100 מ' לכל מקום שמור שנשלח לבדיקת אופק, ותיקון ההערה ב־`myspots.ts` | S | horizon.ts (בתיאום עם sun-engine), myspots.ts | 🟦 ספרינט 1 |
+| S2 | sun-engine | עונש חזק על אופק חסום, וסימון "לא נבדק" | M | score.ts, useHorizons.ts | 🟦 ספרינט 1 |
+| R3 | release | CI: שלב lint, `cancel-in-progress: false` (ה־job בשם `smoke` כבר נוסף על ידי המנהל ב־2026-11-24; לא לגעת בו). תיקון `start.bat` ל־`npm.cmd` ו־`npx.cmd` | S | workflow, start.bat | ⏭️ ספרינט 2 |
 
 **סדר:** U1 ואחריה U2 (`index.tsx`). S1 ואחריה S2, ואחריהן D1 (`horizon.ts` ו־`useHorizons.ts`). כל השאר רצות במקביל.
 
 ---
+
+## ⏸️ בהמתנה
+- **רענון אוטומטי של נתוני המקומות** (פעם בחודש מ־OpenStreetMap, ואחריו בקשה לסקירה). המשתמש/ת ביקש/ה להשהות (2026-11-24).
 
 ## 📋 Backlog לפי סוכן
 
@@ -82,5 +86,6 @@
 ---
 
 ## יומן הצוות
+- **2026-11-24:** המנהל הוסיף שער איכות (Stop hook: tests, typecheck ו־lint לפני שסשן מסיים) ובדיקת smoke לאתר החי אחרי כל פריסה. שניהם נבדקו בשני הכיוונים: עובר כשהכול תקין, ונחסם או נכשל כשיש תקלה.
 - **2026-11-24:** נבדקה טיוטה שלא מוזגה של Antigravity ("Visual-Design-Engineer", 1,548 שורות ב־12 קבצים). הטיוטה נשמרה ב־`project/drafts/`, ונבדק שהיא חלה מחדש בלי שגיאות. מה שנלקח: U5 (ניגודיות, בדיקת ניגודיות, שורת סטטוס), S7 (`getDaySunBounds`) ו־U7 (ערכת צבעים לפי שעה). שני ה־worktrees של Antigravity נמחקו.
 - **2026-11-24:** הצוות הוקם. 5 סקירות במקביל (קריאה בלבד). המנהל אימת את הממצאים המרכזיים, ונבנו הלוח והספרינט הראשון.

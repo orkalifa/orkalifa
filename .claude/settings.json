@@ -14,5 +14,19 @@
       "Bash(git log*)",
       "Bash(git diff*)"
     ]
+  },
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$(git rev-parse --show-toplevel)/apps/sunset-spots/scripts/quality-gate.mjs\"",
+            "timeout": 300,
+            "statusMessage": "Spotlight quality gate: tests, typecheck, lint"
+          }
+        ]
+      }
+    ]
   }
 }

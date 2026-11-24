@@ -54,6 +54,10 @@
 - **המשימות:** המנהל שולח משימה ל־worktree דרך `orca orchestration worker-start`, בודק את מה שחזר וממזג לענף הראשי. הסוכן עובד רק בתוך ה־worktree שלו.
 - **לפני כל משימה:** הסוכן ממזג אליו את הענף הראשי (`git merge claude/claude-improvement-ideas-2rof6t`) ומריץ `npm.cmd install` בתוך `apps/sunset-spots`.
 
+### בדיקות אוטומטיות
+- **שער איכות (Stop hook):** בכל פעם שסשן מסיים (המנהל או סוכן ב־worktree), אם יש שינויים שלא נשמרו ב־`src/`, `tests/`, `scripts/` או בקבצי ההגדרות של האפליקציה, רצים tests, typecheck ו־lint. אם משהו נכשל, הסשן לא מסתיים עד שהבעיה מתוקנת. אחרי 3 ניסיונות על אותו מצב השער משחרר עם אזהרה, והמנהל בודק. מצב שכבר עבר את הבדיקה נשמר ולא נבדק שוב. הסקריפט: `scripts/quality-gate.mjs`. ההוק מוגדר ב־`.claude/settings.json` של הריפו ושל האפליקציה.
+- **בדיקה אחרי פריסה:** אחרי כל פריסה, job בשם `smoke` ב־GitHub Actions פותח את האתר החי ב־Chromium ובודק שהוא נטען בלי שגיאות, ששעת השקיעה והמקומות מוצגים, ושה־manifest וה־service worker זמינים. אם משהו נכשל, הריצה נכשלת ונשמר צילום מסך. הסקריפט: `scripts/smoke-live.mjs`. להרצה מקומית: `SMOKE_CHANNEL=chrome`, וגם `PLAYWRIGHT_DIR` אם Playwright מותקן מחוץ לפרויקט.
+
 ### טלפון וירטואלי (Android Emulator)
 - **ה־SDK:** מותקן ב־`%LOCALAPPDATA%\Android\Sdk` (בלי הרשאות מנהל). ה־JDK נמצא ב־`%LOCALAPPDATA%\Android\jdk`. מכשיר וירטואלי בשם `spotlight` (Pixel 7, Android 35), עם האצת WHPX.
 - **הפעלה:** `"$LOCALAPPDATA/Android/Sdk/emulator/emulator.exe" -avd spotlight -no-snapshot-save &`, ואחר כך `npx.cmd expo start --android` מתוך `apps/sunset-spots` (Expo Go מותקן אוטומטית).
