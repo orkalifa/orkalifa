@@ -3,6 +3,8 @@
 // No I/O here, so it is unit-tested without the network (tests/build-spots.test.ts).
 // Only erasable TypeScript, so Node runs it directly (type stripping).
 
+import { checkOverpassJson } from '../src/lib/overpassResponse.ts';
+
 export type BuiltKind = 'viewpoint' | 'peak' | 'picnic' | 'bench' | 'shelter';
 
 export type BuiltSpot = {
@@ -76,11 +78,11 @@ export function keptTags(tags: Record<string, string>): Record<string, string> {
  */
 export function checkOverpassResponse(status: number, json: unknown): { elements: OverpassElement[] } {
   if (status !== 200) throw new Error(`Overpass HTTP ${status}`);
-  if (!json || typeof json !== 'object') throw new Error('Overpass returned no JSON object');
-  const { remark, elements } = json as { remark?: unknown; elements?: unknown };
-  if (typeof remark === 'string' && remark.trim()) throw new Error(`Overpass remark: ${remark.trim().slice(0, 300)}`);
-  if (!Array.isArray(elements)) throw new Error('Overpass response has no elements array');
-  return { elements: elements as OverpassElement[] };
+  try {
+    return checkOverpassJson(json) as { elements: OverpassElement[] }; // same rules as the app
+  } catch (error) {
+    throw new Error(`Overpass ${error instanceof Error ? error.message : String(error)}`);
+  }
 }
 
 export function toSpots(json: { elements: OverpassElement[] }): BuiltSpot[] {

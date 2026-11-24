@@ -158,3 +158,56 @@ test('overpass reports a timeout per server when none answer', async () => {
     globalThis.fetch = realFetch;
   }
 });
+
+test('overpass treats a 200 with a remark as a failure and asks the next server', async () => {
+  const { overpass, OVERPASS_URLS } = await import('../src/lib/osm.ts');
+  const realFetch = globalThis.fetch;
+  const calls: string[] = [];
+  globalThis.fetch = (async (url: string) => {
+    calls.push(url);
+    if (calls.length === 1) {
+      const body = { remark: 'runtime error: Query timed out in "query" at line 1 after 26 seconds.', elements: [] };
+      return new Response(JSON.stringify(body), { status: 200 });
+    }
+    return new Response(JSON.stringify({ elements: [{ type: 'node', id: 1 }] }), { status: 200 });
+  }) as typeof fetch;
+  try {
+    const json = await overpass<{ elements: unknown[] }>('q');
+    assert.deepEqual(json.elements, [{ type: 'node', id: 1 }]);
+    assert.deepEqual(calls, [OVERPASS_URLS[0], OVERPASS_URLS[1]]);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});
+
+test('overpass rejects when every server answers with a remark or no elements', async () => {
+  const { overpass, OVERPASS_URLS } = await import('../src/lib/osm.ts');
+  const realFetch = globalThis.fetch;
+  const calls: string[] = [];
+  globalThis.fetch = (async (url: string) => {
+    calls.push(url);
+    const body = calls.length % 2 ? { remark: 'runtime error: out of memory', elements: [] } : {};
+    return new Response(JSON.stringify(body), { status: 200 });
+  }) as typeof fetch;
+  try {
+    await assert.rejects(
+      overpass('q'),
+      /overpass-api\.de: remark: runtime error: out of memory · overpass\.private\.coffee: no elements array/,
+    );
+    assert.equal(calls.length, OVERPASS_URLS.length);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});
+
+test('checkOverpassJson accepts clean answers and rejects remarks and bad shapes', async () => {
+  const { checkOverpassJson } = await import('../src/lib/overpassResponse.ts');
+  assert.deepEqual(checkOverpassJson({ elements: [], remark: '' }), { elements: [] });
+  assert.deepEqual(checkOverpassJson({ elements: [1], remark: '  ' }), { elements: [1] });
+  assert.throws(() => checkOverpassJson({ elements: [], remark: 'runtime error: Query timed out' }), /remark: runtime error/);
+  assert.throws(() => checkOverpassJson({ remark: 'x'.repeat(500), elements: [] }), (e: Error) => e.message.length <= 'remark: '.length + 120);
+  assert.throws(() => checkOverpassJson({}), /elements/);
+  assert.throws(() => checkOverpassJson({ elements: {} }), /elements/);
+  assert.throws(() => checkOverpassJson(null), /JSON/);
+  assert.throws(() => checkOverpassJson('x'), /JSON/);
+});

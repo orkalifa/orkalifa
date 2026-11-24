@@ -1,4 +1,5 @@
 import { distanceMeters, type LatLon } from './geo.ts';
+import { checkOverpassJson } from './overpassResponse.ts';
 
 /** `mine`: a place the user saved themselves (lib/myspots.ts), never from OpenStreetMap. */
 export type SpotKind = 'viewpoint' | 'peak' | 'picnic' | 'bench' | 'shelter' | 'mine';
@@ -46,6 +47,7 @@ const host = (url: string) => url.replace(/^https?:\/\/([^/]+).*$/, '$1'); // Re
  * answer. A busy server can sit on a query for a long time, so rather than wait for it to time out
  * before trying the next, the next one is also asked if nothing has come back after `hedgeMs`, and
  * straight away when a server fails. The rest are cancelled once one answers.
+ * An HTTP 200 with a `remark` (e.g. "Query timed out") or without an `elements` array counts as a failure.
  * If all of them fail, the error says why for each ("overpass-api.de: HTTP 429 · …") so the app can show it.
  */
 export function overpass<T>(
@@ -97,7 +99,9 @@ export function overpass<T>(
       })
         .then(async (response) => {
           if (!response.ok) throw new Error(`HTTP ${response.status}`);
-          return (await response.json()) as T;
+          const json: unknown = await response.json();
+          checkOverpassJson(json); // a 200 with a remark is a failed query: try the next server
+          return json as T;
         })
         .then((json) => settle(() => resolve(json)))
         .catch((error: unknown) => {
