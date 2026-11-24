@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocalSearchParams } from 'expo-router';
 import { Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -20,11 +20,13 @@ import { usePlaceName } from '../hooks/usePlaceName';
 import { useSky } from '../hooks/useSky';
 import { useSpots } from '../hooks/useSpots';
 import { distanceMeters, type LatLon } from '../lib/geo';
+import type { Horizon } from '../lib/horizon';
 import { mapRange } from '../lib/mapview';
-import { isMine, toSpot } from '../lib/myspots';
+import { toSpot, type MySpot } from '../lib/myspots';
 import type { Spot } from '../lib/osm';
 import { rankSpots, scoreSpot } from '../lib/score';
-import { parseSharedSpot } from '../lib/share';
+import { parseSharedSpot, type SharedSpot } from '../lib/share';
+import { mapSpotsFor, minuteOf, reachClock, shortlist } from '../lib/shown';
 import { shareSpot } from '../lib/shareSpot';
 import { count } from '../lib/stats';
 import { bearingToHebrew, formatClock, formatCountdown, getEveningLight, getSunsetInfo } from '../lib/sun';
@@ -57,7 +59,10 @@ export default function SunsetScreen() {
   const spots = useSpots(coords);
   const place = usePlaceName(state.status === 'ready' ? state.coords : null);
   // A shared link (?spot=…&ll=…) opens straight on that spot's card.
-  const shared = parseSharedSpot(useLocalSearchParams());
+  const params = useLocalSearchParams();
+  const { spot: pSpot, ll: pLl, k: pK, n: pN } = params;
+  // Parsed once per link, not every second: everything below that depends on it is memoised.
+  const shared = useMemo(() => parseSharedSpot({ spot: pSpot, ll: pLl, k: pK, n: pN }), [pSpot, pLl, pK, pN]);
   const info = coords ? getSunsetInfo(coords.latitude, coords.longitude, now) : null;
   // Tonight's light stays on screen through the blue hour, after the sunset info has moved to tomorrow.
   const light = coords ? getEveningLight(coords.latitude, coords.longitude, now) : null;
@@ -87,36 +92,19 @@ export default function SunsetScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  let ranked: ShownSpot[] | null = null;
-  if (coords && info && pool) {
-    const scored = rankSpots(pool, { lat: coords.latitude, lon: coords.longitude }, info.bearing, VIEW_WEIGHT, horizons.horizons);
-    const top = scored.slice(0, 6);
-    const moreOfMine = scored.filter((s) => isMine(s) && !top.includes(s));
-    ranked = withReach([...top, ...moreOfMine], 'car', now, info.goldenHour, info.sunset);
-  }
-
-  const scoreFromHere = (spot: Spot): ShownSpot | null => {
-    if (!coords || !info) return null;
-    const scored = scoreSpot(spot, { lat: coords.latitude, lon: coords.longitude }, info.bearing, VIEW_WEIGHT, horizons.horizons[spot.id]);
-    return withReach([scored], 'car', now, info.goldenHour, info.sunset)[0];
-  };
-
-  // A shared spot that isn't in your list (far away, or someone else's own place) is scored from here.
-  let sharedShown: ShownSpot | null = null;
-  if (shared && !ranked?.some((s) => s.id === shared.id)) {
-    const ownedHere = mySpots.spots.some((s) => s.id === shared.id);
-    // Someone else's own place isn't "yours" here.
-    sharedShown = scoreFromHere({ ...shared, kind: shared.kind === 'mine' && !ownedHere ? 'viewpoint' : shared.kind, tags: {}, nearby: [] });
-  }
-
-  const mineSelected = mySpots.spots.find((s) => s.id === selectedSpotId);
-  const selectedSpot: ShownSpot | null =
-    ranked?.find((s) => s.id === selectedSpotId) ??
-    (sharedShown?.id === selectedSpotId ? sharedShown : null) ??
-    (mineSelected ? scoreFromHere(toSpot(mineSelected)) : null);
-  // On the map too: the shared spot, and your own one you opened from far away.
-  const mapSpots = [...(ranked ?? []), ...(sharedShown ? [sharedShown] : [])];
-  if (selectedSpot && !mapSpots.some((s) => s.id === selectedSpot.id)) mapSpots.push(selectedSpot);
+  const { ranked, selectedSpot, mapSpots } = useShownSpots({
+    pool,
+    lat,
+    lon,
+    bearing: info?.bearing,
+    goldenMs: info?.goldenHour.getTime(),
+    sunsetMs: info?.sunset.getTime(),
+    minute: minuteOf(now),
+    horizons: horizons.horizons,
+    shared,
+    mine: mySpots.spots,
+    selectedId: selectedSpotId,
+  });
   const selectedIsMine = !!selectedSpot && mySpots.spots.some((s) => s.id === selectedSpot.id);
 
   const closeSpot = () => {
@@ -128,7 +116,7 @@ export default function SunsetScreen() {
   };
 
   // The map's zoom: it fits the shown spots, or a close-up until they're in. The tiles are fetched for the same range.
-  const range = mapRange((ranked ?? []).map((s) => s.distance));
+  const range = useMemo(() => mapRange((ranked ?? []).map((s) => s.distance)), [ranked]);
   const map = useMapLayers(coords, range);
 
   if (state.status === 'loading') {
@@ -409,6 +397,70 @@ export default function SunsetScreen() {
       />
     </View>
   );
+}
+
+type ShownInput = {
+  pool: Spot[] | null;
+  lat: number | undefined;
+  lon: number | undefined;
+  /** Tonight's sunset direction and times (ms): plain values, so they only change with the day. */
+  bearing: number | undefined;
+  goldenMs: number | undefined;
+  sunsetMs: number | undefined;
+  /** The current minute (minuteOf), not the second the countdown ticks on. */
+  minute: number;
+  horizons: Record<string, Horizon>;
+  shared: SharedSpot | null;
+  mine: MySpot[];
+  selectedId: string | null;
+};
+
+/**
+ * The ranked spots, the shared and selected ones, and the map's pins, worked out only when their
+ * inputs change. The screen re-renders every second for the countdown; the ranking doesn't need to:
+ * spots are scored when the spots, your location, tonight's sunset direction or the horizons change,
+ * and the "in time" colours once a minute (for the end of the minute, so they err late).
+ */
+function useShownSpots({ pool, lat, lon, bearing, goldenMs, sunsetMs, minute, horizons, shared, mine, selectedId }: ShownInput) {
+  const scored = useMemo(() => {
+    if (!pool || lat === undefined || lon === undefined || bearing === undefined) return null;
+    return shortlist(rankSpots(pool, { lat, lon }, bearing, VIEW_WEIGHT, horizons));
+  }, [pool, lat, lon, bearing, horizons]);
+
+  const ranked = useMemo<ShownSpot[] | null>(() => {
+    if (!scored || goldenMs === undefined || sunsetMs === undefined) return null;
+    return withReach(scored, 'car', reachClock(minute), new Date(goldenMs), new Date(sunsetMs));
+  }, [scored, minute, goldenMs, sunsetMs]);
+
+  const scoreFromHere = useCallback(
+    (spot: Spot): ShownSpot | null => {
+      if (lat === undefined || lon === undefined || bearing === undefined || goldenMs === undefined || sunsetMs === undefined) return null;
+      const one = scoreSpot(spot, { lat, lon }, bearing, VIEW_WEIGHT, horizons[spot.id]);
+      return withReach([one], 'car', reachClock(minute), new Date(goldenMs), new Date(sunsetMs))[0];
+    },
+    [lat, lon, bearing, horizons, minute, goldenMs, sunsetMs],
+  );
+
+  // A shared spot that isn't in your list (far away, or someone else's own place) is scored from here.
+  const sharedShown = useMemo<ShownSpot | null>(() => {
+    if (!shared || ranked?.some((s) => s.id === shared.id)) return null;
+    const ownedHere = mine.some((s) => s.id === shared.id);
+    // Someone else's own place isn't "yours" here.
+    return scoreFromHere({ ...shared, kind: shared.kind === 'mine' && !ownedHere ? 'viewpoint' : shared.kind, tags: {}, nearby: [] });
+  }, [shared, ranked, mine, scoreFromHere]);
+
+  const selectedSpot = useMemo<ShownSpot | null>(() => {
+    const mineSelected = mine.find((s) => s.id === selectedId);
+    return (
+      ranked?.find((s) => s.id === selectedId) ??
+      (sharedShown?.id === selectedId ? sharedShown : null) ??
+      (mineSelected ? scoreFromHere(toSpot(mineSelected)) : null)
+    );
+  }, [ranked, sharedShown, selectedId, mine, scoreFromHere]);
+
+  // On the map too: the shared spot, and your own one you opened from far away.
+  const mapSpots = useMemo(() => mapSpotsFor(ranked, sharedShown, selectedSpot), [ranked, sharedShown, selectedSpot]);
+  return { ranked, selectedSpot, mapSpots };
 }
 
 const styles = StyleSheet.create({
