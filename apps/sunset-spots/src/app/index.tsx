@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useLocalSearchParams } from 'expo-router';
 import { Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -17,6 +17,7 @@ import { useMySpots } from '../hooks/useMySpots';
 import { useVisits } from '../hooks/useVisits';
 import { useNow } from '../hooks/useNow';
 import { usePlaceName } from '../hooks/usePlaceName';
+import { useSky } from '../hooks/useSky';
 import { useSpots } from '../hooks/useSpots';
 import { distanceMeters, type LatLon } from '../lib/geo';
 import { mapRange } from '../lib/mapview';
@@ -25,8 +26,10 @@ import type { Spot } from '../lib/osm';
 import { rankSpots, scoreSpot } from '../lib/score';
 import { parseSharedSpot } from '../lib/share';
 import { shareSpot } from '../lib/shareSpot';
+import { count } from '../lib/stats';
 import { bearingToHebrew, formatClock, formatCountdown, getEveningLight, getSunsetInfo } from '../lib/sun';
 import { formatDay, unsavedVisits } from '../lib/visits';
+import type { SkyTone } from '../lib/sky';
 import { withReach, type ShownSpot } from '../lib/travel';
 import { colors, fonts, getSkyPhase } from '../theme';
 
@@ -41,6 +44,8 @@ const VIEW_WEIGHT = 0.4;
 const HUD_SPACE = 112;
 /** Your own saved spots show up when they're this close, even if they aren't in the top six. */
 const MY_SPOTS_RADIUS_M = 25000;
+/** The sunset outlook's colour in the top bar: warm when it's worth going, cool when it isn't. */
+const SKY_COLOR: Record<SkyTone, string> = { great: '#FF8A4C', clear: '#F5C451', ok: '#E8D2BC', poor: '#A9BED3' };
 
 export default function SunsetScreen() {
   const { state, retry } = useLocation();
@@ -59,6 +64,7 @@ export default function SunsetScreen() {
   // A real fix (not last time's location): the only one worth saving or remembering.
   const here: LatLon | null = state.status === 'ready' && state.fresh && state.here ? { lat: state.here.latitude, lon: state.here.longitude } : null;
   const visits = useVisits(here, light, now, mySpots.spots, place);
+  const sky = useSky(coords, info?.bearing ?? null, info?.sunset ?? null);
   const lat = coords?.latitude;
   const lon = coords?.longitude;
   // Memoised: the terrain check refetches whenever this list changes.
@@ -74,6 +80,12 @@ export default function SunsetScreen() {
   const [toSave, setToSave] = useState<{ point: LatLon; subtitle: string } | null>(null);
   const [selectedSpotId, setSelectedSpotId] = useState<string | null>(() => shared?.id ?? null);
   const [shareNote, setShareNote] = useState<string | null>(null);
+  // Counts only (lib/stats.ts): an open, and whether it came from a shared link. Once per visit.
+  const cameFromShare = !!shared;
+  useEffect(() => {
+    count(cameFromShare ? 'shared-link-opened' : 'open');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   let ranked: ShownSpot[] | null = null;
   if (coords && info && pool) {
@@ -197,7 +209,12 @@ export default function SunsetScreen() {
             {/* Compact golden hour & bearing ribbon (replaces bulky stat boxes) */}
             <View style={styles.hudFooter}>
               <Text style={styles.hudMeta}>{`זהב ${formatClock(info.goldenHour)} · כיוון ${direction}`}</Text>
-              <Text style={[styles.hudPhase, { color: phase.accent }]}>{phase.label}</Text>
+              {/* One line: tonight's cloud outlook when we have it, otherwise how much time is left. */}
+              {sky ? (
+                <Text style={[styles.hudPhase, { color: SKY_COLOR[sky.tone] }]}>{sky.label}</Text>
+              ) : (
+                <Text style={[styles.hudPhase, { color: phase.accent }]}>{phase.label}</Text>
+              )}
             </View>
           </View>
 
@@ -355,6 +372,7 @@ export default function SunsetScreen() {
         onSave={(name) => {
           if (!toSave) return;
           const saved = mySpots.add(name, toSave.point.lat, toSave.point.lon);
+          count('spot-saved');
           setToSave(null);
           setTimeout(() => setSelectedSpotId(saved.id), 400);
         }}
@@ -370,11 +388,12 @@ export default function SunsetScreen() {
         onShare={() => {
           if (!selectedSpot) return;
           const { id, kind, lat: sLat, lon: sLon, name } = selectedSpot;
-          shareSpot({ id, kind, lat: sLat, lon: sLon, name }, sunsetClock, info.isTomorrow).then((result) =>
+          shareSpot({ id, kind, lat: sLat, lon: sLon, name }, sunsetClock, info.isTomorrow).then((result) => {
+            if (result !== 'failed') count('spot-shared');
             setShareNote(
               result === 'copied' ? 'הקישור הועתק. אפשר להדביק אותו בוואטסאפ.' : result === 'failed' ? 'השיתוף לא הצליח. נסו שוב.' : null,
-            ),
-          );
+            );
+          });
         }}
         shareNote={shareNote}
         onDelete={

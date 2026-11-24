@@ -56,3 +56,16 @@ test('your own spot ranks well and says it is yours', () => {
   assert.ok(mine.score > bench.score);
   assert.ok(mine.reasons.includes('המקום שלך'));
 });
+
+test('counting is off until set up, and never carries a place', async () => {
+  const { countUrl } = await import('../src/lib/stats.ts');
+  assert.equal(countUrl('open', '', 'orkalifa.github.io'), null, 'off without a code');
+  assert.equal(countUrl('open', 'spotlight', 'localhost:8765'), null, 'local tests never count');
+  const open = new URL(countUrl('open', 'spotlight', 'orkalifa.github.io')!);
+  assert.equal(open.host, 'spotlight.goatcounter.com');
+  assert.equal(open.searchParams.get('p'), '/');
+  const shared = new URL(countUrl('shared-link-opened', 'spotlight', 'orkalifa.github.io')!);
+  assert.equal(shared.searchParams.get('p'), '/shared-link-opened');
+  assert.equal(shared.searchParams.get('e'), 'true');
+  assert.deepEqual([...shared.searchParams.keys()].sort(), ['e', 'p', 'rnd'], 'nothing else is sent');
+});
