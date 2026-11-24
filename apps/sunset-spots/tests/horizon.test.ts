@@ -7,7 +7,9 @@ import {
   elevationAngle,
   elevationRequestUrls,
   horizonFromElevations,
+  horizonRequestPoints,
   horizonScore,
+  rayOrigin,
   samplePoints,
 } from '../src/lib/horizon.ts';
 
@@ -73,4 +75,46 @@ test('elevation requests are chunked at 100 points', () => {
   assert.equal(urls.length, 3);
   assert.match(urls[0], /^https:\/\/api\.open-meteo\.com\/v1\/elevation\?latitude=31\.00000,/);
   assert.equal(new URL(urls[2]).searchParams.get('latitude')!.split(',').length, 30);
+});
+
+/** [lat, lon] pairs in the order they appear in the request URLs. */
+const urlPairs = (urls: string[]) =>
+  urls.flatMap((u) => {
+    const q = new URL(u).searchParams;
+    const lat = q.get('latitude')!.split(',').map(Number);
+    const lon = q.get('longitude')!.split(',').map(Number);
+    return lat.map((v, i) => [v, lon[i]] as const);
+  });
+
+const isRounded = (v: number) => Math.abs(v * 1000 - Math.round(v * 1000)) < 1e-9;
+
+test("a saved ('mine') spot leaves the phone only rounded to ~100 m", () => {
+  const mine = { id: 'mine/1', kind: 'mine', lat: 31.434567, lon: 34.612345 };
+  const pairs = urlPairs(elevationRequestUrls(horizonRequestPoints([mine], 270)));
+  assert.equal(pairs.length, SAMPLE_DISTANCES_M.length + 1);
+  const [lat, lon] = pairs[0];
+  assert.ok(isRounded(lat) && isRounded(lon), `spot point ${lat},${lon} has more than 3 decimals`);
+  assert.deepEqual([lat, lon], [31.435, 34.612]);
+  for (const [a, b] of pairs) {
+    assert.notEqual(a, 31.43457);
+    assert.notEqual(b, 34.61235);
+  }
+});
+
+test('non-saved spots are requested exactly as before', () => {
+  const spot = { id: 'node/1', kind: 'viewpoint', lat: 31.434567, lon: 34.612345 };
+  assert.deepEqual(elevationRequestUrls(horizonRequestPoints([spot], 270)), elevationRequestUrls(samplePoints(spot, 270)));
+  assert.deepEqual(rayOrigin(spot), { lat: spot.lat, lon: spot.lon });
+});
+
+test('a mixed list keeps one ray per spot, in order', () => {
+  const spots = [
+    { id: 'a', kind: 'viewpoint', lat: 31.4, lon: 34.6 },
+    { id: 'b', kind: 'mine', lat: 31.123456, lon: 34.654321 },
+  ];
+  const pts = horizonRequestPoints(spots, 260);
+  const per = SAMPLE_DISTANCES_M.length + 1;
+  assert.equal(pts.length, 2 * per);
+  assert.deepEqual(pts.slice(0, per), samplePoints({ lat: 31.4, lon: 34.6 }, 260));
+  assert.deepEqual(pts.slice(per), samplePoints({ lat: 31.123, lon: 34.654 }, 260));
 });
