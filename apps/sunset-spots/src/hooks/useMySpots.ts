@@ -10,7 +10,16 @@ export function useMySpots() {
 
   useEffect(() => {
     AsyncStorage.getItem(KEY)
-      .then((raw) => setSpots(parseStored(raw)))
+      .then((raw) => {
+        const stored = parseStored(raw);
+        // Keep anything saved before this read came back (and store the merged list).
+        setSpots((prev) => {
+          if (prev.length === 0) return stored;
+          const merged = [...stored, ...prev.filter((p) => !stored.some((s) => s.id === p.id))];
+          AsyncStorage.setItem(KEY, JSON.stringify(merged)).catch(() => {});
+          return merged;
+        });
+      })
       .catch(() => {});
   }, []);
 

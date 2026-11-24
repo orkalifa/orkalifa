@@ -20,13 +20,18 @@ const FALLBACK: Coords = { latitude: 32.08, longitude: 34.78 }; // Tel Aviv
 const LAST_KEY = 'spotlight.lastLocation.v1';
 /** Moving less than this doesn't move the map. */
 const MOVE_M = 150;
+/** A last-known fix younger than this counts as where you are now. */
+const RECENT_FIX_MS = 2 * 60 * 1000;
 
 async function locate(): Promise<LocationState> {
   try {
     const { granted } = await Location.requestForegroundPermissionsAsync();
     if (!granted) return { status: 'fallback', coords: FALLBACK, reason: 'denied' };
+    // A last-known fix can be hours old and somewhere else (it's what you'd save, or log as a sunset
+    // visit), so take it only if it's recent; otherwise ask the phone for a current one.
     const position =
-      (await Location.getLastKnownPositionAsync()) ?? (await Location.getCurrentPositionAsync());
+      (await Location.getLastKnownPositionAsync({ maxAge: RECENT_FIX_MS, requiredAccuracy: 200 })) ??
+      (await Location.getCurrentPositionAsync());
     const { latitude, longitude } = position.coords;
     return { status: 'ready', coords: { latitude, longitude }, fresh: true };
   } catch {
@@ -72,14 +77,14 @@ export function useLocation() {
   useEffect(() => {
     let cancelled = false;
 
-    AsyncStorage.getItem(LAST_KEY)
-      .then((raw) => {
-        const last = readLast(raw);
-        if (!cancelled && last) setState((prev) => (prev.status === 'loading' ? { status: 'ready', coords: last, fresh: false } : prev));
-      })
-      .catch(() => {});
+    (async () => {
+      // Last time's location first (milliseconds), so a quick failure below, like a permission
+      // that's already denied, can still fall back to it rather than to Tel Aviv.
+      const last = readLast(await AsyncStorage.getItem(LAST_KEY).catch(() => null));
+      if (cancelled) return;
+      if (last) setState((prev) => (prev.status === 'loading' ? { status: 'ready', coords: last, fresh: false } : prev));
 
-    locateWithTimeout().then((next) => {
+      const next = await locateWithTimeout();
       if (cancelled) return;
       if (next.status === 'ready') {
         AsyncStorage.setItem(LAST_KEY, JSON.stringify(next.coords)).catch(() => {});
@@ -93,7 +98,7 @@ export function useLocation() {
           prev.status === 'ready' && !prev.fresh ? { status: 'fallback', coords: prev.coords, reason: 'stale' } : next,
         );
       }
-    });
+    })();
     return () => {
       cancelled = true;
     };
