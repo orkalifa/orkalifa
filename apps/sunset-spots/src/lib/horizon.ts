@@ -26,6 +26,28 @@ export type Horizon = {
   sea: boolean;
 };
 
+/** Saved places ('mine') leave the phone only rounded to this many decimals (~100 m). */
+export const PRIVATE_DECIMALS = 3;
+
+const roundTo = (x: number, decimals: number) => {
+  const f = 10 ** decimals;
+  return Math.round(x * f) / f;
+};
+
+/**
+ * Where the terrain ray starts. For a place you saved yourself this is its position rounded to ~100 m,
+ * so the exact point is in no request (the ray samples are derived from the rounded point too).
+ */
+export function rayOrigin(spot: LatLon & { kind?: string }): LatLon {
+  if (spot.kind === 'mine') return { lat: roundTo(spot.lat, PRIVATE_DECIMALS), lon: roundTo(spot.lon, PRIVATE_DECIMALS) };
+  return { lat: spot.lat, lon: spot.lon };
+}
+
+/** Every point sent to the elevation API for these spots: [origin, ...ray samples] per spot, in order. */
+export function horizonRequestPoints(spots: (LatLon & { kind?: string })[], bearing: number): LatLon[] {
+  return spots.flatMap((s) => samplePoints(rayOrigin(s), bearing));
+}
+
 export function samplePoints(spot: LatLon, bearing: number): LatLon[] {
   return [spot, ...SAMPLE_DISTANCES_M.map((d) => destinationPoint(spot, bearing, d))];
 }
@@ -73,12 +95,12 @@ export function elevationRequestUrls(points: LatLon[]): string[] {
 
 /** Horizons for several spots, keyed by spot id, using Open-Meteo's free elevation API (90 m DEM). */
 export async function fetchHorizons(
-  spots: (LatLon & { id: string })[],
+  spots: (LatLon & { id: string; kind?: string })[],
   bearing: number,
   signal?: AbortSignal,
 ): Promise<Record<string, Horizon>> {
   const perSpot = SAMPLE_DISTANCES_M.length + 1;
-  const points = spots.flatMap((s) => samplePoints(s, bearing));
+  const points = horizonRequestPoints(spots, bearing);
   const elevations: number[] = [];
   for (const url of elevationRequestUrls(points)) {
     const response = await fetch(url, { signal });
