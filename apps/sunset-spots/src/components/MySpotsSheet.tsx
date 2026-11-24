@@ -5,6 +5,7 @@ import { distanceMeters, formatDistance, type LatLon } from '../lib/geo';
 import type { MySpot } from '../lib/myspots';
 import { formatDay, type Visit } from '../lib/visits';
 import { colors, fonts } from '../theme';
+import { PressableScale } from './motion';
 import { ICON_PATHS } from './SpotPin';
 
 type Props = {
@@ -98,11 +99,11 @@ function Star() {
 /** Round button over the map, next to the compass. */
 export function MySpotsButton({ onPress }: { onPress: () => void }) {
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [styles.fab, pressed && styles.pressed]} accessibilityRole="button" accessibilityLabel="המקומות שלי">
+    <PressableScale onPress={onPress} style={styles.fab} accessibilityRole="button" accessibilityLabel="המקומות שלי">
       <Svg width={20} height={20} viewBox="0 0 24 24">
         <Path d={ICON_PATHS.mine} fill="none" stroke="#FBD687" strokeWidth={2} strokeLinejoin="round" />
       </Svg>
-    </Pressable>
+    </PressableScale>
   );
 }
 

@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useHeading } from '../hooks/useHeading';
 import { angleBetween, bearingToHebrew } from '../lib/sun';
 import { colors, fonts } from '../theme';
+import { PressableScale } from './motion';
 import { SunCompass } from './SunCompass';
 
 const ALIGNED_DEGREES = 8;
@@ -93,9 +94,9 @@ function CompassBody({ bearing, sunsetClock, onClose }: { bearing: number; sunse
 /** Dark-espresso floating compass button, matching the top HUD chrome. */
 export function CompassButton({ onPress }: { onPress: () => void }) {
   return (
-    <Pressable
+    <PressableScale
       onPress={onPress}
-      style={({ pressed }) => [styles.fab, pressed && styles.pressed]}
+      style={styles.fab}
       accessibilityRole="button"
       accessibilityLabel="פתיחת המצפן"
       hitSlop={8}
@@ -105,7 +106,7 @@ export function CompassButton({ onPress }: { onPress: () => void }) {
         <Path d="M12 5l3 7h-6z" fill="#FF7736" />
         <Path d="M12 19l-3-7h6z" fill="#EEDAC4" />
       </Svg>
-    </Pressable>
+    </PressableScale>
   );
 }
 

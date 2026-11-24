@@ -105,3 +105,46 @@ export function getSkyPhase(now: Date, goldenHour: Date, sunset: Date, isTomorro
     progress,
   };
 }
+
+/**
+ * One calm motion system for the whole app (from the spacefs.com reference in project/DESIGN-REFS.md):
+ * a single strong ease-out for entrances, short micro-interactions, and no bounce anywhere.
+ */
+export const motion = {
+  /** cubic-bezier control points for every entrance. */
+  ease: [0.22, 1, 0.36, 1] as const,
+  /** Entrance duration (ms). */
+  enter: 700,
+  /** Opacity/colour micro-interactions (ms). */
+  micro: 180,
+  /** Press shrink and release (ms). */
+  press: 90,
+  /** How far an entering element rises (px). */
+  rise: 12,
+  /** Delay between staggered siblings (ms). */
+  stagger: 50,
+  /** Stagger stops growing after this many steps, so long lists don't drag. */
+  staggerMax: 6,
+  /** Scale while pressed. */
+  pressScale: 0.97,
+  /** Opacity while pressed. */
+  pressOpacity: 0.86,
+  /** Starting scale of a "settling" headline. */
+  settleScale: 0.96,
+  /** Starting blur of a settling headline on web (px). */
+  settleBlur: 6,
+};
+
+/** Entrance delay of the i-th sibling in a staggered group. */
+export function staggerDelay(index: number): number {
+  return Math.min(Math.max(0, index), motion.staggerMax) * motion.stagger;
+}
+
+/**
+ * What a staggered list's entrance is keyed on: which items are shown, not their order.
+ * Re-scoring, a re-rank that only reorders the same items, or the clock ticking keeps the key,
+ * so the entrance doesn't replay; a new or removed item changes it.
+ */
+export function motionKey(ids: readonly string[]): string {
+  return [...ids].sort().join('|');
+}
