@@ -10,14 +10,14 @@ on:
       - ".github/workflows/deploy-spotlight.yml"
   workflow_dispatch:
 
+# Only the deploy job gets the Pages permissions (see below).
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
+# Never cancel a Pages deploy that is already running; the next run waits for it.
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   build:
@@ -35,6 +35,10 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run typecheck
+      - run: npx expo lint
+        env:
+          CI: 1
+          EXPO_OFFLINE: 1
       # Export + icons, manifest, offline service worker, link previews (scripts/web-postbuild.mjs).
       - run: npm run build:web
         env:
@@ -47,6 +51,9 @@ jobs:
   deploy:
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
