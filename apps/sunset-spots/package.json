@@ -42,7 +42,8 @@
     "typecheck": "tsc --noEmit",
     "test": "node --test \"tests/**/*.test.ts\"",
     "lint": "expo lint",
-    "build:web": "expo export -p web && node scripts/web-postbuild.mjs"
+    "build:web": "expo export -p web && node scripts/web-postbuild.mjs",
+    "build:spots": "node scripts/build-spots.mjs"
   },
   "private": true
 }
