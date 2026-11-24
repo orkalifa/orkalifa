@@ -1,0 +1,3211 @@
+diff --git a/apps/sunset-spots/src/app/_layout.tsx b/apps/sunset-spots/src/app/_layout.tsx
+index d529b7c..098ac86 100644
+--- a/apps/sunset-spots/src/app/_layout.tsx
++++ b/apps/sunset-spots/src/app/_layout.tsx
+@@ -7,16 +7,20 @@ import {
+   Rubik_700Bold,
+   useFonts,
+ } from '@expo-google-fonts/rubik';
+-import { colors } from '../theme';
++import { useNow } from '../hooks/useNow';
++import { getFallbackSkyPhase } from '../theme';
+ 
+ export default function RootLayout() {
+   const [fontsLoaded] = useFonts({ Rubik_400Regular, Rubik_500Medium, Rubik_600SemiBold, Rubik_700Bold });
++  const now = useNow(60000);
+   if (!fontsLoaded) return null;
+ 
++  const phase = getFallbackSkyPhase(now);
++
+   return (
+     <>
+-      <StatusBar style="dark" />
+-      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.sheet } }} />
++      <StatusBar style={phase.statusBarStyle} />
++      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: phase.ui.sheet } }} />
+     </>
+   );
+ }
+diff --git a/apps/sunset-spots/src/app/index.tsx b/apps/sunset-spots/src/app/index.tsx
+index 10168cd..a09c8a3 100644
+--- a/apps/sunset-spots/src/app/index.tsx
++++ b/apps/sunset-spots/src/app/index.tsx
+@@ -1,5 +1,6 @@
+ import { useState } from 'react';
+ import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
++import { StatusBar } from 'expo-status-bar';
+ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+ import Svg, { Circle, Path } from 'react-native-svg';
+ import { CompassButton, CompassSheet } from '../components/CompassSheet';
+@@ -14,9 +15,9 @@ import { usePlaceName } from '../hooks/usePlaceName';
+ import { useSpots } from '../hooks/useSpots';
+ import { mapRange } from '../lib/mapview';
+ import { rankSpots } from '../lib/score';
+-import { bearingToHebrew, formatClock, formatCountdown, getSunsetInfo } from '../lib/sun';
++import { bearingToHebrew, formatClock, formatCountdown, getDaySunBounds, getSunsetInfo } from '../lib/sun';
+ import { withReach, type ShownSpot } from '../lib/travel';
+-import { colors, fonts, getSkyPhase } from '../theme';
++import { fonts, getFallbackSkyPhase, getSkyPhase, type SkyPhase } from '../theme';
+ 
+ /** Share of the screen height the map takes; the bottom sheet rises up cleanly over its lower edge. */
+ const MAP_SHARE = 0.6;
+@@ -37,6 +38,7 @@ export default function SunsetScreen() {
+   const spots = useSpots(coords);
+   const place = usePlaceName(state.status === 'ready' ? state.coords : null);
+   const info = coords ? getSunsetInfo(coords.latitude, coords.longitude, now) : null;
++  const bounds = coords ? getDaySunBounds(coords.latitude, coords.longitude, now) : undefined;
+   const horizons = useHorizons(spots.state.status === 'ready' ? spots.state.spots : null, coords, info?.bearing ?? null);
+   const [compassOpen, setCompassOpen] = useState(false);
+   const [selectedSpotId, setSelectedSpotId] = useState<string | null>(null);
+@@ -59,29 +61,35 @@ export default function SunsetScreen() {
+   const map = useMapLayers(coords, range);
+ 
+   if (state.status === 'loading') {
++    const loadingPhase = getFallbackSkyPhase(now);
+     return (
+-      <SafeAreaView style={[styles.screen, styles.center]}>
+-        <Text style={styles.muted}>מחפש את המיקום שלך…</Text>
++      <SafeAreaView style={[styles.screen, styles.center, { backgroundColor: loadingPhase.ui.sheet }]}>
++        <StatusBar style={loadingPhase.isDark ? 'light' : 'dark'} />
++        <Text style={[styles.muted, { color: loadingPhase.ui.muted }]}>מחפש את המיקום שלך…</Text>
+       </SafeAreaView>
+     );
+   }
+ 
+   const { latitude, longitude } = state.coords;
+   if (!info) {
++    const emptyPhase = getFallbackSkyPhase(now);
+     return (
+-      <SafeAreaView style={[styles.screen, styles.center]}>
+-        <Text style={styles.muted}>במקום הזה השמש לא שוקעת היום.</Text>
++      <SafeAreaView style={[styles.screen, styles.center, { backgroundColor: emptyPhase.ui.sheet }]}>
++        <StatusBar style={emptyPhase.isDark ? 'light' : 'dark'} />
++        <Text style={[styles.muted, { color: emptyPhase.ui.muted }]}>במקום הזה השמש לא שוקעת היום.</Text>
+       </SafeAreaView>
+     );
+   }
+ 
+-  const phase = getSkyPhase(now, info.goldenHour, info.sunset, info.isTomorrow);
++  const phase = getSkyPhase(now, info.goldenHour, info.sunset, info.isTomorrow, bounds);
++  const { ui, hud } = phase;
+   const direction = bearingToHebrew(info.bearing);
+   const sunsetClock = formatClock(info.sunset);
+   const inTimeCount = ranked ? ranked.filter((s) => s.reach.inTime).length : 0;
+ 
+   return (
+-    <View style={styles.screen}>
++    <View style={[styles.screen, { backgroundColor: ui.sheet }]}>
++      <StatusBar style={compassOpen ? 'light' : phase.statusBarStyle} />
+       <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 28 }} showsVerticalScrollIndicator={false}>
+         <View>
+           <SpotMap
+@@ -92,34 +100,31 @@ export default function SunsetScreen() {
+             range={range}
+             height={Math.round(windowHeight * MAP_SHARE)}
+             top={insets.top + HUD_SPACE}
++            phase={phase}
+             selectedId={selectedSpotId}
+             onSelectSpot={(spot) => setSelectedSpotId(spot.id)}
+           />
+ 
+-          {/* Sculpted Deep-Espresso Sunset HUD */}
+-          <View style={[styles.hud, { top: insets.top + 10 }]}>
++          {/* Floating Phase-Aware Sunset HUD */}
++          <View style={[styles.hud, { top: insets.top + 10, backgroundColor: hud.bg, borderColor: hud.border, shadowColor: hud.shadow }]}>
+             <View style={styles.hudTop}>
+               <View style={styles.hudRight}>
+-                <View style={styles.sunIconBox}>
+-                  <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
+-                    <Path d="M3 17.5h18" stroke="rgba(255,235,210,0.45)" strokeWidth={1.8} strokeLinecap="round" />
+-                    <Path d="M7 17.5a5 5 0 0 1 10 0" fill={phase.accent} />
+-                    <Path d="M12 7V4.5M5.8 11.2 4.2 9.6M18.2 11.2l1.6-1.6" stroke={phase.accent} strokeWidth={1.8} strokeLinecap="round" />
+-                  </Svg>
++                <View style={[styles.sunIconBox, { backgroundColor: hud.iconBoxBg, borderColor: hud.iconBoxBorder }]}>
++                  <PhaseSkyIcon phase={phase} />
+                 </View>
+                 <View style={styles.hudTimeCol}>
+-                  <Text style={styles.hudLabel} numberOfLines={1}>
++                  <Text style={[styles.hudLabel, { color: hud.label }]} numberOfLines={1}>
+                     {info.isTomorrow ? 'השקיעה מחר' : 'השקיעה היום'}
+                     {place ? ` · ${place}` : ''}
+                   </Text>
+-                  <Text style={styles.hudTime}>{sunsetClock}</Text>
++                  <Text style={[styles.hudTime, { color: hud.time }]}>{sunsetClock}</Text>
+                 </View>
+               </View>
+ 
+               <View style={[styles.countdownPill, { backgroundColor: phase.badgeBg }]}>
+                 <View style={[styles.countdownDot, { backgroundColor: phase.accent }]} />
+                 <View style={styles.countdownTextWrap}>
+-                  <Text style={styles.countdownCaption}>בעוד</Text>
++                  <Text style={[styles.countdownCaption, { color: hud.countdownCaption }]}>בעוד</Text>
+                   <Text style={[styles.countdownValue, { color: phase.badgeText }]}>
+                     {formatCountdown(info.sunset.getTime() - now.getTime())}
+                   </Text>
+@@ -127,61 +132,71 @@ export default function SunsetScreen() {
+               </View>
+             </View>
+ 
+-            {/* Thin golden-hour progress hairline */}
+-            <View style={styles.progressTrack}>
++            {/* Thin solar progress hairline */}
++            <View style={[styles.progressTrack, { backgroundColor: hud.trackBg }]}>
+               <View style={[styles.progressFill, { width: `${Math.round(phase.progress * 100)}%`, backgroundColor: phase.accent }]} />
+             </View>
+ 
+-            {/* Compact golden hour & bearing ribbon (replaces bulky stat boxes) */}
++            {/* Compact golden hour & bearing ribbon */}
+             <View style={styles.hudFooter}>
+-              <Text style={styles.hudMeta}>{`זהב ${formatClock(info.goldenHour)} · כיוון ${direction}`}</Text>
++              <Text style={[styles.hudMeta, { color: hud.meta }]}>{`זהב ${formatClock(info.goldenHour)} · כיוון ${direction}`}</Text>
+               <Text style={[styles.hudPhase, { color: phase.accent }]}>{phase.label}</Text>
+             </View>
+           </View>
+ 
+           {/* Compass FAB positioned cleanly above the rising sheet curve */}
+           <View style={styles.fab}>
+-            <CompassButton onPress={() => setCompassOpen(true)} />
++            <CompassButton phase={phase} onPress={() => setCompassOpen(true)} />
+           </View>
+         </View>
+ 
+         {/* Layered Rounded Bottom Sheet */}
+-        <View style={styles.sheet}>
+-          <View style={styles.handle} />
++        <View
++          style={[
++            styles.sheet,
++            {
++              backgroundColor: ui.sheet,
++              shadowColor: hud.shadow,
++              borderTopWidth: phase.isDark ? 1 : 0,
++              borderTopColor: ui.sheetTopBorder,
++            },
++          ]}
++        >
++          <View style={[styles.handle, { backgroundColor: ui.handle }]} />
+ 
+           {map.error && spots.state.status !== 'error' && (
+-            <View style={styles.notice}>
+-              <Text style={styles.noticeText}>
++            <View style={[styles.notice, { backgroundColor: ui.sandSoft, borderColor: ui.lineStrong }]}>
++              <Text style={[styles.noticeText, { color: ui.inkSoft }]}>
+                 {map.layers.roads.length ? 'חלק מהמפה לא נטען.' : 'המפה (כבישים, שדות ויישובים) לא נטענה.'}
+               </Text>
+-              <Text style={styles.errorDetail} selectable>
++              <Text style={[styles.errorDetail, { color: ui.muted }]} selectable>
+                 {map.error}
+               </Text>
+-              <Pressable onPress={map.retry} style={styles.button} accessibilityRole="button">
+-                <Text style={styles.buttonText}>לנסות שוב</Text>
++              <Pressable onPress={map.retry} style={[styles.button, { backgroundColor: ui.primaryBtnBg }]} accessibilityRole="button">
++                <Text style={[styles.buttonText, { color: ui.primaryBtnText }]}>לנסות שוב</Text>
+               </Pressable>
+             </View>
+           )}
+ 
+           {state.status === 'fallback' && (
+-            <View style={styles.noticeCompact}>
+-              <Text style={[styles.noticeText, styles.noticeCompactText]}>
++            <View style={[styles.noticeCompact, { backgroundColor: ui.sandSoft, borderColor: ui.line }]}>
++              <Text style={[styles.noticeText, styles.noticeCompactText, { color: ui.inkSoft }]}>
+                 {state.reason === 'denied'
+                   ? 'אין הרשאת מיקום · מוצגת תל אביב'
+                   : 'לא נמצא מיקום · מוצגת תל אביב'}
+               </Text>
+-              <Pressable onPress={retry} style={styles.compactBtn} accessibilityRole="button">
+-                <Text style={styles.compactBtnText}>נסה שוב</Text>
++              <Pressable onPress={retry} style={[styles.compactBtn, { backgroundColor: ui.primaryBtnBg }]} accessibilityRole="button">
++                <Text style={[styles.compactBtnText, { color: ui.primaryBtnText }]}>נסה שוב</Text>
+               </Pressable>
+             </View>
+           )}
+ 
+           <View style={styles.section}>
+             <View style={styles.sectionHeader}>
+-              <Text style={styles.sectionTitle}>מקומות לשקיעה סביבך</Text>
++              <Text style={[styles.sectionTitle, { color: ui.ink }]}>מקומות לשקיעה סביבך</Text>
+               {ranked && ranked.length > 0 && (
+-                <View style={styles.summaryPill}>
+-                  <Text style={styles.summaryPillText}>
++                <View style={[styles.summaryPill, { backgroundColor: ui.sandSoft, borderColor: ui.line }]}>
++                  <Text style={[styles.summaryPillText, { color: ui.muted }]}>
+                     {inTimeCount > 0 ? `${inTimeCount} בזמן הערב` : `${ranked.length} מקומות`}
+                   </Text>
+                 </View>
+@@ -189,19 +204,19 @@ export default function SunsetScreen() {
+             </View>
+ 
+             {spots.state.status === 'loading' && (
+-              <View style={styles.loadingCard}>
++              <View style={[styles.loadingCard, { backgroundColor: ui.surface, borderColor: ui.line }]}>
+                 <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+-                  <Circle cx={12} cy={12} r={9} stroke={colors.lineStrong} strokeWidth={2.5} />
+-                  <Path d="M12 3a9 9 0 0 1 9 9" stroke={colors.orange} strokeWidth={2.5} strokeLinecap="round" />
++                  <Circle cx={12} cy={12} r={9} stroke={ui.lineStrong} strokeWidth={2.5} />
++                  <Path d="M12 3a9 9 0 0 1 9 9" stroke={phase.accent} strokeWidth={2.5} strokeLinecap="round" />
+                 </Svg>
+-                <Text style={styles.muted}>מחפש נקודות תצפית וספסלים סביבך…</Text>
++                <Text style={[styles.muted, { color: ui.muted }]}>מחפש נקודות תצפית וספסלים סביבך…</Text>
+               </View>
+             )}
+ 
+             {spots.state.status === 'error' && (
+-              <View style={styles.notice}>
+-                <Text style={styles.noticeText}>לא הצלחנו לטעון מקומות מהמפה.</Text>
+-                <Text style={styles.errorDetail} selectable>
++              <View style={[styles.notice, { backgroundColor: ui.sandSoft, borderColor: ui.lineStrong }]}>
++                <Text style={[styles.noticeText, { color: ui.inkSoft }]}>לא הצלחנו לטעון מקומות מהמפה.</Text>
++                <Text style={[styles.errorDetail, { color: ui.muted }]} selectable>
+                   {spots.state.message}
+                 </Text>
+                 <Pressable
+@@ -209,10 +224,10 @@ export default function SunsetScreen() {
+                     spots.retry();
+                     map.retry();
+                   }}
+-                  style={styles.button}
++                  style={[styles.button, { backgroundColor: ui.primaryBtnBg }]}
+                   accessibilityRole="button"
+                 >
+-                  <Text style={styles.buttonText}>לנסות שוב</Text>
++                  <Text style={[styles.buttonText, { color: ui.primaryBtnText }]}>לנסות שוב</Text>
+                 </Pressable>
+               </View>
+             )}
+@@ -220,6 +235,7 @@ export default function SunsetScreen() {
+             {ranked && (
+               <SpotList
+                 spots={ranked}
++                phase={phase}
+                 selectedId={selectedSpotId}
+                 onSelectSpot={(spot) => setSelectedSpotId(spot.id)}
+                 now={now}
+@@ -228,14 +244,14 @@ export default function SunsetScreen() {
+             )}
+ 
+             {spots.state.status === 'ready' && horizons.status === 'idle' && (
+-              <Text style={styles.soon}>בודק את קו האופק לכיוון השקיעה…</Text>
++              <Text style={[styles.soon, { color: ui.muted }]}>בודק את קו האופק לכיוון השקיעה…</Text>
+             )}
+             {spots.state.status === 'ready' && horizons.status === 'error' && (
+-              <Text style={styles.soon}>בדיקת קו האופק לא הצליחה, אז הדירוג מבוסס על סוג המקום.</Text>
++              <Text style={[styles.soon, { color: ui.muted }]}>בדיקת קו האופק לא הצליחה, אז הדירוג מבוסס על סוג המקום.</Text>
+             )}
+           </View>
+ 
+-          <Text style={styles.attribution}>
++          <Text style={[styles.attribution, { color: ui.mutedSoft }]}>
+             מפה: OpenFreeMap © OpenMapTiles · נתונים: © OpenStreetMap contributors · גובה: Open-Meteo
+           </Text>
+         </View>
+@@ -245,6 +261,7 @@ export default function SunsetScreen() {
+         visible={compassOpen}
+         bearing={info.bearing}
+         sunsetClock={sunsetClock}
++        phase={phase}
+         onClose={() => setCompassOpen(false)}
+       />
+ 
+@@ -254,6 +271,7 @@ export default function SunsetScreen() {
+         sunset={info.sunset}
+         goldenHour={info.goldenHour}
+         bearing={info.bearing}
++        phase={phase}
+         onClose={() => setSelectedSpotId(null)}
+         // iOS can't present a modal while another is still sliding away, so wait for the spot sheet to close.
+         onOpenCompass={() => setTimeout(() => setCompassOpen(true), 400)}
+@@ -262,8 +280,53 @@ export default function SunsetScreen() {
+   );
+ }
+ 
++function PhaseSkyIcon({ phase }: { phase: SkyPhase }) {
++  const { id, accent, hud } = phase;
++  if (id === 'night') {
++    return (
++      <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
++        <Path
++          d="M15.8 14.9A6.4 6.4 0 0 1 9.1 8.2a6.4 6.4 0 0 1 .7-2.9A7.2 7.2 0 1 0 18.7 14.2a6.3 6.3 0 0 1-2.9.7Z"
++          fill={accent}
++        />
++        <Circle cx={17.5} cy={7} r={1.3} fill={accent} />
++      </Svg>
++    );
++  }
++  if (id === 'blue') {
++    return (
++      <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
++        <Path d="M3 14.5h18" stroke={hud.horizonLine} strokeWidth={1.8} strokeLinecap="round" />
++        <Path d="M6.5 14.5a5.5 5.5 0 0 1 11 0" fill={accent} opacity={0.35} />
++        <Path d="M8 17.8h8M10 20.5h4" stroke={accent} strokeWidth={1.8} strokeLinecap="round" />
++      </Svg>
++    );
++  }
++  if (id === 'golden') {
++    return (
++      <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
++        <Path d="M3 17.5h18" stroke={hud.horizonLine} strokeWidth={1.8} strokeLinecap="round" />
++        <Path d="M6.5 17.5a5.5 5.5 0 0 1 11 0" fill={accent} />
++        <Path d="M12 8.2V6M6.2 12.2 4.6 10.6M17.8 12.2l1.6-1.6" stroke={accent} strokeWidth={1.8} strokeLinecap="round" />
++      </Svg>
++    );
++  }
++  return (
++    <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
++      <Path d="M3 18.5h18" stroke={hud.horizonLine} strokeWidth={1.8} strokeLinecap="round" />
++      <Circle cx={12} cy={12.5} r={4.2} fill={accent} />
++      <Path
++        d="M12 5.5V3.5M6.3 7.5 4.9 6.1M17.7 7.5l1.4-1.4M4.8 12.5H3M21 12.5h-1.8"
++        stroke={accent}
++        strokeWidth={1.8}
++        strokeLinecap="round"
++      />
++    </Svg>
++  );
++}
++
+ const styles = StyleSheet.create({
+-  screen: { flex: 1, backgroundColor: colors.sheet },
++  screen: { flex: 1 },
+   center: { alignItems: 'center', justifyContent: 'center' },
+   hud: {
+     position: 'absolute',
+@@ -272,12 +335,9 @@ const styles = StyleSheet.create({
+     paddingTop: 12,
+     paddingBottom: 10,
+     paddingHorizontal: 14,
+-    backgroundColor: 'rgba(26, 18, 14, 0.92)',
+     borderRadius: 24,
+     borderWidth: 1,
+-    borderColor: colors.obsidianBorder,
+     gap: 10,
+-    shadowColor: '#1A120E',
+     shadowOpacity: 0.24,
+     shadowRadius: 18,
+     shadowOffset: { width: 0, height: 8 },
+@@ -299,15 +359,13 @@ const styles = StyleSheet.create({
+     width: 40,
+     height: 40,
+     borderRadius: 14,
+-    backgroundColor: 'rgba(255, 224, 185, 0.08)',
+     borderWidth: 1,
+-    borderColor: 'rgba(255, 224, 185, 0.12)',
+     alignItems: 'center',
+     justifyContent: 'center',
+   },
+   hudTimeCol: { alignItems: 'flex-end', flexShrink: 1 },
+-  hudLabel: { fontFamily: fonts.regular, fontSize: 12, color: '#C8B29F', textAlign: 'right' },
+-  hudTime: { fontFamily: fonts.bold, fontSize: 28, color: '#FFF8F0', lineHeight: 32 },
++  hudLabel: { fontFamily: fonts.regular, fontSize: 12, textAlign: 'right' },
++  hudTime: { fontFamily: fonts.bold, fontSize: 28, lineHeight: 32 },
+   countdownPill: {
+     flexDirection: 'row-reverse',
+     alignItems: 'center',
+@@ -318,12 +376,11 @@ const styles = StyleSheet.create({
+   },
+   countdownDot: { width: 7, height: 7, borderRadius: 3.5 },
+   countdownTextWrap: { alignItems: 'flex-start' },
+-  countdownCaption: { fontFamily: fonts.regular, fontSize: 10.5, color: 'rgba(255, 236, 212, 0.72)' },
++  countdownCaption: { fontFamily: fonts.regular, fontSize: 10.5 },
+   countdownValue: { fontFamily: fonts.bold, fontSize: 16 },
+   progressTrack: {
+     height: 3,
+     borderRadius: 2,
+-    backgroundColor: 'rgba(255, 236, 212, 0.12)',
+     overflow: 'hidden',
+     alignItems: 'flex-end',
+   },
+@@ -333,7 +390,7 @@ const styles = StyleSheet.create({
+     alignItems: 'center',
+     justifyContent: 'space-between',
+   },
+-  hudMeta: { fontFamily: fonts.medium, fontSize: 12, color: '#D8C2AE' },
++  hudMeta: { fontFamily: fonts.medium, fontSize: 12 },
+   hudPhase: { fontFamily: fonts.semibold, fontSize: 11.5 },
+   fab: { position: 'absolute', left: 14, bottom: 38 },
+   sheet: {
+@@ -341,11 +398,9 @@ const styles = StyleSheet.create({
+     paddingTop: 10,
+     paddingHorizontal: 16,
+     gap: 16,
+-    backgroundColor: colors.sheet,
+     borderTopLeftRadius: 28,
+     borderTopRightRadius: 28,
+-    shadowColor: '#1A120E',
+-    shadowOpacity: 0.12,
++    shadowOpacity: 0.14,
+     shadowRadius: 16,
+     shadowOffset: { width: 0, height: -6 },
+     elevation: 8,
+@@ -355,7 +410,6 @@ const styles = StyleSheet.create({
+     width: 38,
+     height: 4.5,
+     borderRadius: 3,
+-    backgroundColor: colors.lineStrong,
+     marginBottom: 2,
+   },
+   section: { gap: 12 },
+@@ -365,16 +419,14 @@ const styles = StyleSheet.create({
+     justifyContent: 'space-between',
+     gap: 8,
+   },
+-  sectionTitle: { fontFamily: fonts.bold, fontSize: 20, color: colors.ink, textAlign: 'right' },
++  sectionTitle: { fontFamily: fonts.bold, fontSize: 20, textAlign: 'right' },
+   summaryPill: {
+     paddingVertical: 4,
+     paddingHorizontal: 10,
+     borderRadius: 999,
+-    backgroundColor: colors.sandSoft,
+     borderWidth: 1,
+-    borderColor: colors.line,
+   },
+-  summaryPillText: { fontFamily: fonts.medium, fontSize: 12, color: colors.muted },
++  summaryPillText: { fontFamily: fonts.medium, fontSize: 12 },
+   loadingCard: {
+     flexDirection: 'row-reverse',
+     alignItems: 'center',
+@@ -382,16 +434,12 @@ const styles = StyleSheet.create({
+     gap: 10,
+     padding: 18,
+     borderRadius: 18,
+-    backgroundColor: colors.surface,
+     borderWidth: 1,
+-    borderColor: colors.line,
+   },
+   notice: {
+     padding: 14,
+-    backgroundColor: colors.sandSoft,
+     borderRadius: 18,
+     borderWidth: 1,
+-    borderColor: colors.lineStrong,
+     gap: 10,
+     alignItems: 'flex-end',
+   },
+@@ -402,26 +450,23 @@ const styles = StyleSheet.create({
+     gap: 10,
+     paddingVertical: 9,
+     paddingHorizontal: 13,
+-    backgroundColor: colors.sandSoft,
+     borderRadius: 16,
+     borderWidth: 1,
+-    borderColor: colors.line,
+   },
+   noticeCompactText: { flex: 1, fontSize: 13 },
+   compactBtn: {
+     minHeight: 34,
+     paddingHorizontal: 12,
+     borderRadius: 10,
+-    backgroundColor: colors.obsidian,
+     justifyContent: 'center',
+   },
+-  compactBtnText: { fontFamily: fonts.semibold, fontSize: 12.5, color: '#FFF7ED' },
+-  noticeText: { fontFamily: fonts.regular, fontSize: 14, color: colors.inkSoft, textAlign: 'right' },
++  compactBtnText: { fontFamily: fonts.semibold, fontSize: 12.5 },
++  noticeText: { fontFamily: fonts.regular, fontSize: 14, textAlign: 'right' },
+   // Technical reason in English (server and HTTP status), so a screenshot tells us what failed.
+-  errorDetail: { fontFamily: fonts.regular, fontSize: 11, color: colors.muted, textAlign: 'left', alignSelf: 'stretch' },
+-  button: { minHeight: 42, paddingHorizontal: 16, justifyContent: 'center', backgroundColor: colors.obsidian, borderRadius: 12 },
+-  buttonText: { fontFamily: fonts.semibold, fontSize: 14, color: '#FFF7ED' },
+-  muted: { fontFamily: fonts.regular, fontSize: 14.5, color: colors.muted, textAlign: 'center' },
+-  soon: { fontFamily: fonts.regular, fontSize: 12.5, color: colors.muted, textAlign: 'center' },
+-  attribution: { fontFamily: fonts.regular, fontSize: 11, color: colors.mutedSoft, textAlign: 'center', paddingTop: 4 },
++  errorDetail: { fontFamily: fonts.regular, fontSize: 11, textAlign: 'left', alignSelf: 'stretch' },
++  button: { minHeight: 42, paddingHorizontal: 16, justifyContent: 'center', borderRadius: 12 },
++  buttonText: { fontFamily: fonts.semibold, fontSize: 14 },
++  muted: { fontFamily: fonts.regular, fontSize: 14.5, textAlign: 'center' },
++  soon: { fontFamily: fonts.regular, fontSize: 12.5, textAlign: 'center' },
++  attribution: { fontFamily: fonts.regular, fontSize: 11, textAlign: 'center', paddingTop: 4 },
+ });
+diff --git a/apps/sunset-spots/src/components/CompassSheet.tsx b/apps/sunset-spots/src/components/CompassSheet.tsx
+index 2e5ade6..fccbfb8 100644
+--- a/apps/sunset-spots/src/components/CompassSheet.tsx
++++ b/apps/sunset-spots/src/components/CompassSheet.tsx
+@@ -1,11 +1,12 @@
+ import { useRef, useState } from 'react';
+ import { Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
++import { StatusBar } from 'expo-status-bar';
+ import { useSharedValue, withSpring } from 'react-native-reanimated';
+ import Svg, { Circle, Path } from 'react-native-svg';
+ import { SafeAreaView } from 'react-native-safe-area-context';
+ import { useHeading } from '../hooks/useHeading';
+ import { angleBetween, bearingToHebrew } from '../lib/sun';
+-import { colors, fonts } from '../theme';
++import { fonts, type SkyPhase } from '../theme';
+ import { SunCompass } from './SunCompass';
+ 
+ const ALIGNED_DEGREES = 8;
+@@ -18,21 +19,35 @@ export function CompassSheet({
+   visible,
+   bearing,
+   sunsetClock,
++  phase,
+   onClose,
+ }: {
+   visible: boolean;
+   bearing: number;
+   sunsetClock?: string;
++  phase: SkyPhase;
+   onClose: () => void;
+ }) {
+   return (
+     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
+-      {visible && <CompassBody bearing={bearing} sunsetClock={sunsetClock} onClose={onClose} />}
++      {visible && <StatusBar style="light" />}
++      {visible && <CompassBody bearing={bearing} sunsetClock={sunsetClock} phase={phase} onClose={onClose} />}
+     </Modal>
+   );
+ }
+ 
+-function CompassBody({ bearing, sunsetClock, onClose }: { bearing: number; sunsetClock?: string; onClose: () => void }) {
++function CompassBody({
++  bearing,
++  sunsetClock,
++  phase,
++  onClose,
++}: {
++  bearing: number;
++  sunsetClock?: string;
++  phase: SkyPhase;
++  onClose: () => void;
++}) {
++  const { compass } = phase;
+   const rotation = useSharedValue(0);
+   // Unwrapped heading (can pass 360) so 359° → 1° turns 2°, not all the way round.
+   const turned = useRef(0);
+@@ -50,30 +65,44 @@ function CompassBody({ bearing, sunsetClock, onClose }: { bearing: number; sunse
+   const direction = bearingToHebrew(bearing);
+ 
+   return (
+-    <SafeAreaView style={styles.screen}>
++    <SafeAreaView style={[styles.screen, { backgroundColor: compass.bg }]}>
+       <View style={styles.topBar}>
+-        <Pressable onPress={onClose} style={styles.closeIconBtn} accessibilityRole="button" accessibilityLabel="חזרה למפה" hitSlop={8}>
++        <Pressable
++          onPress={onClose}
++          style={[styles.closeIconBtn, { backgroundColor: compass.pillBg, borderColor: compass.pillBorder }]}
++          accessibilityRole="button"
++          accessibilityLabel="חזרה למפה"
++          hitSlop={8}
++        >
+           <Svg width={18} height={18} viewBox="0 0 24 24">
+-            <Path d="M6 6l12 12M18 6L6 18" stroke="#FFF4E6" strokeWidth={2.4} strokeLinecap="round" />
++            <Path d="M6 6l12 12M18 6L6 18" stroke={compass.closeText} strokeWidth={2.4} strokeLinecap="round" />
+           </Svg>
+         </Pressable>
+ 
+-        <View style={styles.metaPill}>
+-          <View style={styles.metaDot} />
+-          <Text style={styles.metaText}>{sunsetClock ? `שקיעה ב־${sunsetClock} · ${direction}` : `השקיעה ב${direction}`}</Text>
++        <View style={[styles.metaPill, { backgroundColor: compass.pillBg, borderColor: compass.pillBorder }]}>
++          <View style={[styles.metaDot, { backgroundColor: phase.accent }]} />
++          <Text style={[styles.metaText, { color: compass.closeText }]}>
++            {sunsetClock ? `שקיעה ב־${sunsetClock} · ${direction}` : `השקיעה ב${direction}`}
++          </Text>
+         </View>
+       </View>
+ 
+       <View style={styles.center}>
+-        <Text style={styles.title}>לאן להסתכל</Text>
+-        <Text style={styles.subtitle}>{`השמש תרד לכיוון ${direction} (${Math.round(bearing)}°)`}</Text>
++        <Text style={[styles.title, { color: compass.title }]}>לאן להסתכל</Text>
++        <Text style={[styles.subtitle, { color: compass.subtitle }]}>{`השמש תרד לכיוון ${direction} (${Math.round(bearing)}°)`}</Text>
+ 
+         <View style={styles.compass}>
+-          <SunCompass bearing={bearing} rotation={rotation} live={live} aligned={aligned} size={316} />
++          <SunCompass bearing={bearing} rotation={rotation} live={live} aligned={aligned} compass={compass} size={316} />
+         </View>
+ 
+-        <View style={[styles.hintPill, aligned && styles.hintPillAligned]}>
+-          <Text style={[styles.hint, aligned && styles.hintAligned]}>
++        <View
++          style={[
++            styles.hintPill,
++            { backgroundColor: compass.pillBg, borderColor: compass.pillBorder },
++            aligned && { backgroundColor: compass.alignedBg, borderColor: compass.alignedBorder },
++          ]}
++        >
++          <Text style={[styles.hint, { color: compass.hint }, aligned && { color: compass.alignedText, fontFamily: fonts.bold }]}>
+             {!live
+               ? 'המצפן פועל בטלפון · כאן הוא מוצג כשהצפון למעלה'
+               : aligned
+@@ -83,27 +112,36 @@ function CompassBody({ bearing, sunsetClock, onClose }: { bearing: number; sunse
+         </View>
+       </View>
+ 
+-      <Pressable onPress={onClose} style={({ pressed }) => [styles.close, pressed && styles.pressed]} accessibilityRole="button">
+-        <Text style={styles.closeText}>חזרה למפה</Text>
++      <Pressable
++        onPress={onClose}
++        style={({ pressed }) => [styles.close, { backgroundColor: compass.closeBg, borderColor: compass.closeBorder }, pressed && styles.pressed]}
++        accessibilityRole="button"
++      >
++        <Text style={[styles.closeText, { color: compass.closeText }]}>חזרה למפה</Text>
+       </Pressable>
+     </SafeAreaView>
+   );
+ }
+ 
+-/** Dark-espresso floating compass button, matching the top HUD chrome. */
+-export function CompassButton({ onPress }: { onPress: () => void }) {
++/** Phase-styled floating compass button, matching the top HUD chrome. */
++export function CompassButton({ phase, onPress }: { phase: SkyPhase; onPress: () => void }) {
++  const { ui } = phase;
+   return (
+     <Pressable
+       onPress={onPress}
+-      style={({ pressed }) => [styles.fab, pressed && styles.pressed]}
++      style={({ pressed }) => [
++        styles.fab,
++        { backgroundColor: ui.fabBg, borderColor: ui.fabBorder, shadowColor: phase.hud.shadow },
++        pressed && styles.pressed,
++      ]}
+       accessibilityRole="button"
+       accessibilityLabel="פתיחת המצפן"
+       hitSlop={8}
+     >
+       <Svg width={22} height={22} viewBox="0 0 24 24">
+-        <Circle cx={12} cy={12} r={9.5} fill="none" stroke="rgba(255, 236, 212, 0.72)" strokeWidth={1.8} />
+-        <Path d="M12 5l3 7h-6z" fill="#FF7736" />
+-        <Path d="M12 19l-3-7h6z" fill="#EEDAC4" />
++        <Circle cx={12} cy={12} r={9.5} fill="none" stroke={ui.fabRing} strokeWidth={1.8} />
++        <Path d="M12 5l3 7h-6z" fill={ui.fabNorth} />
++        <Path d="M12 19l-3-7h6z" fill={ui.fabSouth} />
+       </Svg>
+     </Pressable>
+   );
+@@ -112,7 +150,6 @@ export function CompassButton({ onPress }: { onPress: () => void }) {
+ const styles = StyleSheet.create({
+   screen: {
+     flex: 1,
+-    backgroundColor: '#150E0B',
+     justifyContent: 'space-between',
+     paddingHorizontal: 20,
+     paddingTop: 10,
+@@ -127,9 +164,7 @@ const styles = StyleSheet.create({
+     width: 40,
+     height: 40,
+     borderRadius: 20,
+-    backgroundColor: 'rgba(255, 234, 209, 0.1)',
+     borderWidth: 1,
+-    borderColor: 'rgba(255, 234, 209, 0.16)',
+     alignItems: 'center',
+     justifyContent: 'center',
+   },
+@@ -140,50 +175,36 @@ const styles = StyleSheet.create({
+     paddingVertical: 8,
+     paddingHorizontal: 14,
+     borderRadius: 999,
+-    backgroundColor: 'rgba(255, 234, 209, 0.08)',
+     borderWidth: 1,
+-    borderColor: 'rgba(255, 234, 209, 0.14)',
+   },
+-  metaDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#F7A934' },
+-  metaText: { fontFamily: fonts.medium, fontSize: 13, color: '#FBEBD6' },
++  metaDot: { width: 8, height: 8, borderRadius: 4 },
++  metaText: { fontFamily: fonts.medium, fontSize: 13 },
+   center: { alignItems: 'center', gap: 10 },
+-  title: { fontFamily: fonts.bold, fontSize: 28, color: '#FFF7ED' },
+-  subtitle: { fontFamily: fonts.regular, fontSize: 14, color: '#BFA795', textAlign: 'center' },
++  title: { fontFamily: fonts.bold, fontSize: 28 },
++  subtitle: { fontFamily: fonts.regular, fontSize: 14, textAlign: 'center' },
+   compass: { alignItems: 'center', marginVertical: 14 },
+   hintPill: {
+     paddingVertical: 10,
+     paddingHorizontal: 18,
+     borderRadius: 999,
+-    backgroundColor: 'rgba(255, 234, 209, 0.08)',
+     borderWidth: 1,
+-    borderColor: 'rgba(255, 234, 209, 0.14)',
+-  },
+-  hintPillAligned: {
+-    backgroundColor: 'rgba(247, 179, 52, 0.2)',
+-    borderColor: '#F7B334',
+   },
+-  hint: { fontFamily: fonts.medium, fontSize: 14, color: '#EAD5C0', textAlign: 'center' },
+-  hintAligned: { color: '#FFE099', fontFamily: fonts.bold },
++  hint: { fontFamily: fonts.medium, fontSize: 14, textAlign: 'center' },
+   close: {
+     minHeight: 50,
+     borderRadius: 16,
+-    backgroundColor: 'rgba(255, 234, 209, 0.12)',
+     borderWidth: 1,
+-    borderColor: 'rgba(255, 234, 209, 0.18)',
+     alignItems: 'center',
+     justifyContent: 'center',
+   },
+-  closeText: { fontFamily: fonts.semibold, fontSize: 15, color: '#FFF6EB' },
++  closeText: { fontFamily: fonts.semibold, fontSize: 15 },
+   fab: {
+     width: 44,
+     height: 44,
+     alignItems: 'center',
+     justifyContent: 'center',
+-    backgroundColor: colors.obsidian,
+     borderRadius: 22,
+     borderWidth: 1,
+-    borderColor: 'rgba(255, 224, 185, 0.22)',
+-    shadowColor: '#1A120E',
+     shadowOpacity: 0.28,
+     shadowRadius: 12,
+     shadowOffset: { width: 0, height: 5 },
+diff --git a/apps/sunset-spots/src/components/SpotDetailSheet.tsx b/apps/sunset-spots/src/components/SpotDetailSheet.tsx
+index 7feca90..661bd72 100644
+--- a/apps/sunset-spots/src/components/SpotDetailSheet.tsx
++++ b/apps/sunset-spots/src/components/SpotDetailSheet.tsx
+@@ -5,7 +5,7 @@ import { formatDistance } from '../lib/geo';
+ import type { SpotKind } from '../lib/osm';
+ import { bearingToHebrew, formatClock } from '../lib/sun';
+ import { travelMinutes, type ShownSpot } from '../lib/travel';
+-import { colors, fonts } from '../theme';
++import { fonts, type SkyPhase } from '../theme';
+ import { SpotPin } from './SpotPin';
+ 
+ const KIND_LABEL: Record<SpotKind, string> = {
+@@ -16,12 +16,24 @@ const KIND_LABEL: Record<SpotKind, string> = {
+   shelter: 'סככה',
+ };
+ 
++const STARS = [
++  { x: 46, y: 24, r: 1.2 },
++  { x: 102, y: 34, r: 1 },
++  { x: 178, y: 20, r: 1.4 },
++  { x: 244, y: 38, r: 1.1 },
++  { x: 312, y: 26, r: 1.3 },
++  { x: 358, y: 46, r: 1 },
++  { x: 74, y: 52, r: 0.9 },
++  { x: 214, y: 50, r: 1.1 },
++];
++
+ type Props = {
+   spot: ShownSpot | null;
+   now: Date;
+   sunset: Date;
+   goldenHour: Date;
+   bearing: number;
++  phase: SkyPhase;
+   onClose: () => void;
+   onOpenCompass: () => void;
+ };
+@@ -30,11 +42,12 @@ function openWaze(spot: ShownSpot) {
+   Linking.openURL(`https://waze.com/ul?ll=${spot.lat},${spot.lon}&navigate=yes`);
+ }
+ 
+-/** Slide-up detail sheet for a selected spot: bespoke horizon mood art, 3 score rings, ETA and navigation. */
+-export function SpotDetailSheet({ spot, now, sunset, goldenHour, bearing, onClose, onOpenCompass }: Props) {
++/** Slide-up detail sheet for a selected spot: phase-aware horizon art, 3 score rings, ETA and navigation. */
++export function SpotDetailSheet({ spot, now, sunset, goldenHour, bearing, phase, onClose, onOpenCompass }: Props) {
+   const insets = useSafeAreaInsets();
+   if (!spot) return null;
+ 
++  const { ui, map, horizon } = phase;
+   const driveMin = Math.max(1, Math.round(travelMinutes(spot.distance, 'car')));
+   const arrival = new Date(now.getTime() + driveMin * 60000);
+   const minsBeforeSunset = Math.round((sunset.getTime() - arrival.getTime()) / 60000);
+@@ -54,72 +67,81 @@ export function SpotDetailSheet({ spot, now, sunset, goldenHour, bearing, onClos
+ 
+   return (
+     <Modal visible={!!spot} animationType="slide" transparent onRequestClose={onClose}>
+-      <View style={styles.backdrop}>
++      <View style={[styles.backdrop, { backgroundColor: ui.scrim }]}>
+         <Pressable style={styles.scrim} onPress={onClose} accessibilityLabel="סגירת פרטי מקום" />
+ 
+-        <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 16) + 8 }]}>
+-          <View style={styles.heroWrap}>
+-            <HorizonArt mode={sceneMode} accent={spot.reach.color} />
++        <View style={[styles.sheet, { backgroundColor: ui.sheet, paddingBottom: Math.max(insets.bottom, 16) + 8 }]}>
++          <View style={[styles.heroWrap, { backgroundColor: horizon.sky0 }]}>
++            <HorizonArt mode={sceneMode} horizon={horizon} isNight={phase.isDark} />
+ 
+             <Pressable onPress={onClose} style={styles.closeBtn} accessibilityRole="button" accessibilityLabel="סגירה" hitSlop={8}>
+               <Svg width={18} height={18} viewBox="0 0 24 24">
+-                <Path d="M6 6l12 12M18 6L6 18" stroke={colors.white} strokeWidth={2.4} strokeLinecap="round" />
++                <Path d="M6 6l12 12M18 6L6 18" stroke="#FFFFFF" strokeWidth={2.4} strokeLinecap="round" />
+               </Svg>
+             </Pressable>
+ 
+-            <View style={styles.heroBadge}>
++            <View style={[styles.heroBadge, { backgroundColor: ui.heroBadgeBg, borderColor: ui.heroBadgeBorder }]}>
+               <View style={[styles.reachDot, { backgroundColor: spot.reach.color }]} />
+-              <Text style={styles.heroBadgeText}>{arrivalText}</Text>
++              <Text style={[styles.heroBadgeText, { color: ui.heroBadgeText }]}>{arrivalText}</Text>
+             </View>
+           </View>
+ 
+           <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
+             <View style={styles.headerRow}>
+               <View style={styles.headerText}>
+-                <Text style={styles.kindTag}>{KIND_LABEL[spot.kind]}</Text>
+-                <Text style={styles.title}>{title}</Text>
+-                <Text style={styles.subline}>
++                <Text style={[styles.kindTag, { color: ui.kindText }]}>{KIND_LABEL[spot.kind]}</Text>
++                <Text style={[styles.title, { color: ui.ink }]}>{title}</Text>
++                <Text style={[styles.subline, { color: ui.muted }]}>
+                   {`${formatDistance(spot.distance)} ממך · כ־${driveMin} דק' נסיעה · שקיעה ב${bearingToHebrew(bearing)}`}
+                 </Text>
+               </View>
+               <View style={styles.pinBadge}>
+-                <SpotPin kind={spot.kind} color={spot.reach.color} opacity={spot.reach.opacity} size={34} shadow />
++                <SpotPin
++                  kind={spot.kind}
++                  color={spot.reach.color}
++                  opacity={spot.reach.opacity}
++                  size={34}
++                  shadow
++                  strokeColor={map.pinStroke}
++                  shadowColor={map.pinShadow}
++                  shadowOpacity={map.pinShadowOpacity}
++                />
+               </View>
+             </View>
+ 
+-            <View style={styles.ringsCard}>
+-              <ScoreRing label="נוף" value={spot.view} color={colors.orange} />
+-              <View style={styles.ringDivider} />
+-              <ScoreRing label="נגישות" value={spot.access} color={colors.gold} />
+-              <View style={styles.ringDivider} />
+-              <ScoreRing label="נעימות" value={spot.pleasant} color={colors.sage} />
++            <View style={[styles.ringsCard, { backgroundColor: ui.surface, borderColor: ui.line }]}>
++              <ScoreRing label="נוף" value={spot.view} color={ui.ringView} trackColor={ui.ringTrack} valueColor={ui.ink} labelColor={ui.inkSoft} />
++              <View style={[styles.ringDivider, { backgroundColor: ui.line }]} />
++              <ScoreRing label="נגישות" value={spot.access} color={ui.ringAccess} trackColor={ui.ringTrack} valueColor={ui.ink} labelColor={ui.inkSoft} />
++              <View style={[styles.ringDivider, { backgroundColor: ui.line }]} />
++              <ScoreRing label="נעימות" value={spot.pleasant} color={ui.ringPleasant} trackColor={ui.ringTrack} valueColor={ui.ink} labelColor={ui.inkSoft} />
+             </View>
+ 
+             {spot.reasons.length > 0 && (
+               <View style={styles.tagsWrap}>
+                 {spot.reasons.map((r) => (
+-                  <View key={r} style={styles.tag}>
+-                    <Text style={styles.tagText}>{r}</Text>
++                  <View key={r} style={[styles.tag, { backgroundColor: ui.sandSoft, borderColor: ui.line }]}>
++                    <Text style={[styles.tagText, { color: ui.inkSoft }]}>{r}</Text>
+                   </View>
+                 ))}
+-                <View style={styles.tagSoft}>
+-                  <Text style={styles.tagSoftText}>{`ציון כללי ${spot.score}`}</Text>
++                <View style={[styles.tagSoft, { backgroundColor: ui.tagSoftBg }]}>
++                  <Text style={[styles.tagSoftText, { color: ui.tagSoftText }]}>{`ציון כללי ${spot.score}`}</Text>
+                 </View>
+               </View>
+             )}
+           </ScrollView>
+ 
+-          <View style={styles.actions}>
++          <View style={[styles.actions, { borderTopColor: ui.line, backgroundColor: ui.sheet }]}>
+             <Pressable
+               onPress={() => openWaze(spot)}
+-              style={({ pressed }) => [styles.primaryBtn, pressed && styles.pressed]}
++              style={({ pressed }) => [styles.primaryBtn, { backgroundColor: ui.primaryBtnBg }, pressed && styles.pressed]}
+               accessibilityRole="link"
+               accessibilityLabel={`ניווט ב־Waze אל ${title}`}
+             >
+               <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
+-                <Path d="M3 11l18-8-8 18-2-8-8-2z" stroke={colors.white} strokeWidth={2.2} strokeLinejoin="round" />
++                <Path d="M3 11l18-8-8 18-2-8-8-2z" stroke={ui.primaryBtnText} strokeWidth={2.2} strokeLinejoin="round" />
+               </Svg>
+-              <Text style={styles.primaryBtnText}>ניווט ב־Waze</Text>
++              <Text style={[styles.primaryBtnText, { color: ui.primaryBtnText }]}>ניווט ב־Waze</Text>
+             </Pressable>
+ 
+             <Pressable
+@@ -127,16 +149,16 @@ export function SpotDetailSheet({ spot, now, sunset, goldenHour, bearing, onClos
+                 onClose();
+                 onOpenCompass();
+               }}
+-              style={({ pressed }) => [styles.secondaryBtn, pressed && styles.pressed]}
++              style={({ pressed }) => [styles.secondaryBtn, { backgroundColor: ui.secondaryBtnBg, borderColor: ui.secondaryBtnBorder }, pressed && styles.pressed]}
+               accessibilityRole="button"
+               accessibilityLabel="פתיחת המצפן לכיוון השקיעה"
+             >
+               <Svg width={19} height={19} viewBox="0 0 24 24">
+-                <Circle cx={12} cy={12} r={9.5} fill="none" stroke={colors.ink} strokeWidth={2} />
+-                <Path d="M12 5.5l2.8 6.5h-5.6z" fill={colors.orange} />
+-                <Path d="M12 18.5l-2.8-6.5h5.6z" fill={colors.inkSoft} />
++                <Circle cx={12} cy={12} r={9.5} fill="none" stroke={ui.ink} strokeWidth={2} />
++                <Path d="M12 5.5l2.8 6.5h-5.6z" fill={phase.accent} />
++                <Path d="M12 18.5l-2.8-6.5h5.6z" fill={ui.inkSoft} />
+               </Svg>
+-              <Text style={styles.secondaryBtnText}>מצפן</Text>
++              <Text style={[styles.secondaryBtnText, { color: ui.secondaryBtnText }]}>מצפן</Text>
+             </Pressable>
+           </View>
+         </View>
+@@ -145,14 +167,28 @@ export function SpotDetailSheet({ spot, now, sunset, goldenHour, bearing, onClos
+   );
+ }
+ 
+-function ScoreRing({ label, value, color }: { label: string; value: number; color: string }) {
++function ScoreRing({
++  label,
++  value,
++  color,
++  trackColor,
++  valueColor,
++  labelColor,
++}: {
++  label: string;
++  value: number;
++  color: string;
++  trackColor: string;
++  valueColor: string;
++  labelColor: string;
++}) {
+   const r = 24;
+   const circ = 2 * Math.PI * r;
+   const dash = (Math.max(0, Math.min(100, value)) / 100) * circ;
+   return (
+     <View style={styles.ringItem}>
+       <Svg width={64} height={64} viewBox="0 0 64 64">
+-        <Circle cx={32} cy={32} r={r} fill="none" stroke={colors.sand} strokeWidth={5.5} />
++        <Circle cx={32} cy={32} r={r} fill="none" stroke={trackColor} strokeWidth={5.5} />
+         <Circle
+           cx={32}
+           cy={32}
+@@ -164,60 +200,88 @@ function ScoreRing({ label, value, color }: { label: string; value: number; colo
+           strokeDasharray={`${dash} ${circ}`}
+           transform="rotate(-90 32 32)"
+         />
+-        <SvgText x={32} y={37} textAnchor="middle" fontSize={16} fontFamily={fonts.bold} fill={colors.ink}>
++        <SvgText x={32} y={37} textAnchor="middle" fontSize={16} fontFamily={fonts.bold} fill={valueColor}>
+           {`${value}`}
+         </SvgText>
+       </Svg>
+-      <Text style={styles.ringLabel}>{label}</Text>
++      <Text style={[styles.ringLabel, { color: labelColor }]}>{label}</Text>
+     </View>
+   );
+ }
+ 
+-function HorizonArt({ mode, accent }: { mode: 'sea' | 'ridge' | 'open'; accent: string }) {
++function HorizonArt({
++  mode,
++  horizon,
++  isNight,
++}: {
++  mode: 'sea' | 'ridge' | 'open';
++  horizon: SkyPhase['horizon'];
++  isNight: boolean;
++}) {
++  const sunY = horizon.sunY;
+   return (
+     <Svg width="100%" height={156} viewBox="0 0 400 156" preserveAspectRatio="xMidYMid slice">
+       <Defs>
+         <LinearGradient id="detailSky" x1="0" y1="0" x2="0" y2="1">
+-          <Stop offset="0" stopColor="#26181A" />
+-          <Stop offset="0.45" stopColor="#8C3D28" />
+-          <Stop offset="0.82" stopColor="#E6833E" />
+-          <Stop offset="1" stopColor="#F9CA7A" />
++          <Stop offset="0" stopColor={horizon.sky0} />
++          <Stop offset="0.45" stopColor={horizon.sky1} />
++          <Stop offset="0.82" stopColor={horizon.sky2} />
++          <Stop offset="1" stopColor={horizon.sky3} />
+         </LinearGradient>
+         <RadialGradient id="detailSun" cx="50%" cy="50%" r="50%">
+-          <Stop offset="0" stopColor="#FFF5D6" stopOpacity="1" />
+-          <Stop offset="0.45" stopColor={accent} stopOpacity="0.65" />
+-          <Stop offset="1" stopColor="#E6833E" stopOpacity="0" />
++          <Stop offset="0" stopColor={horizon.sunCore} stopOpacity={isNight ? 0.85 : 1} />
++          <Stop offset="0.45" stopColor={horizon.sunEdge} stopOpacity={horizon.sunGlowOpacity} />
++          <Stop offset="1" stopColor={horizon.sunEdge} stopOpacity="0" />
+         </RadialGradient>
+       </Defs>
+ 
+       <Rect width={400} height={156} fill="url(#detailSky)" />
+-      <Circle cx={118} cy={104} r={76} fill="url(#detailSun)" />
+-      <Circle cx={118} cy={104} r={22} fill="#FFF2CA" />
++
++      {horizon.starsOpacity > 0 &&
++        STARS.map((s, i) => (
++          <Circle key={i} cx={s.x} cy={s.y} r={s.r} fill="#F5F7FF" opacity={horizon.starsOpacity * (i % 2 === 0 ? 0.9 : 0.55)} />
++        ))}
++
++      <Circle cx={118} cy={sunY} r={isNight ? 58 : 76} fill="url(#detailSun)" />
++      {isNight ? (
++        <>
++          <Circle cx={118} cy={sunY} r={14} fill={horizon.sunCore} opacity={0.92} />
++          <Circle cx={124} cy={sunY - 3} r={12} fill={horizon.sky1} />
++        </>
++      ) : (
++        <Circle cx={118} cy={sunY} r={22} fill={horizon.sunCore} />
++      )}
+ 
+       {mode === 'sea' && (
+         <>
+-          <Rect x={0} y={108} width={400} height={48} fill="#2A2128" />
+-          <Path d="M84 114h68M94 122h48M104 130h28M110 138h16" stroke="#F8C26D" strokeWidth={2.5} strokeLinecap="round" opacity={0.75} />
+-          <Path d="M0 134 C110 124 240 144 400 128 V156 H0 Z" fill="#1A120E" opacity={0.85} />
++          <Rect x={0} y={108} width={400} height={48} fill={horizon.seaFill} />
++          <Path
++            d="M84 114h68M94 122h48M104 130h28M110 138h16"
++            stroke={horizon.seaGlow}
++            strokeWidth={2.5}
++            strokeLinecap="round"
++            opacity={isNight ? 0.45 : 0.75}
++          />
++          <Path d="M0 134 C110 124 240 144 400 128 V156 H0 Z" fill={horizon.seaWave} opacity={0.88} />
+         </>
+       )}
+ 
+       {mode === 'ridge' && (
+         <>
+-          <Path d="M0 112 C60 88 125 94 185 106 C250 118 320 82 400 96 V156 H0 Z" fill="#46251D" opacity={0.85} />
+-          <Path d="M0 126 C95 112 215 134 400 114 V156 H0 Z" fill="#1F1410" />
++          <Path d="M0 112 C60 88 125 94 185 106 C250 118 320 82 400 96 V156 H0 Z" fill={horizon.ridgeBack} opacity={0.88} />
++          <Path d="M0 126 C95 112 215 134 400 114 V156 H0 Z" fill={horizon.ridgeFront} />
+         </>
+       )}
+ 
+       {mode === 'open' && (
+         <>
+-          <Path d="M0 110 C120 104 260 112 400 105 V156 H0 Z" fill="#5C2D1E" opacity={0.7} />
+-          <Path d="M0 122 C110 116 250 126 400 118 V156 H0 Z" fill="#231510" />
++          <Path d="M0 110 C120 104 260 112 400 105 V156 H0 Z" fill={horizon.openBack} opacity={0.75} />
++          <Path d="M0 122 C110 116 250 126 400 118 V156 H0 Z" fill={horizon.openFront} />
+           {/* Distant olive/lone tree silhouette echoing the Spotlight inspiration */}
+-          <Rect x={294} y={96} width={4} height={24} rx={2} fill="#231510" />
+-          <Circle cx={296} cy={92} r={14} fill="#231510" />
+-          <Circle cx={286} cy={96} r={9} fill="#231510" />
+-          <Circle cx={307} cy={96} r={9} fill="#231510" />
++          <Rect x={294} y={96} width={4} height={24} rx={2} fill={horizon.openFront} />
++          <Circle cx={296} cy={92} r={14} fill={horizon.openFront} />
++          <Circle cx={286} cy={96} r={9} fill={horizon.openFront} />
++          <Circle cx={307} cy={96} r={9} fill={horizon.openFront} />
+         </>
+       )}
+     </Svg>
+@@ -225,21 +289,20 @@ function HorizonArt({ mode, accent }: { mode: 'sea' | 'ridge' | 'open'; accent:
+ }
+ 
+ const styles = StyleSheet.create({
+-  backdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(20, 13, 9, 0.48)' },
++  backdrop: { flex: 1, justifyContent: 'flex-end' },
+   scrim: { flex: 1 },
+   sheet: {
+-    backgroundColor: colors.sheet,
+     borderTopLeftRadius: 28,
+     borderTopRightRadius: 28,
+     overflow: 'hidden',
+     maxHeight: '84%',
+     shadowColor: '#000',
+-    shadowOpacity: 0.25,
++    shadowOpacity: 0.28,
+     shadowRadius: 24,
+     shadowOffset: { width: 0, height: -8 },
+     elevation: 16,
+   },
+-  heroWrap: { height: 156, position: 'relative', backgroundColor: colors.obsidian },
++  heroWrap: { height: 156, position: 'relative' },
+   closeBtn: {
+     position: 'absolute',
+     top: 14,
+@@ -247,9 +310,9 @@ const styles = StyleSheet.create({
+     width: 36,
+     height: 36,
+     borderRadius: 18,
+-    backgroundColor: 'rgba(26, 18, 14, 0.56)',
++    backgroundColor: 'rgba(20, 16, 22, 0.56)',
+     borderWidth: 1,
+-    borderColor: 'rgba(255, 255, 255, 0.18)',
++    borderColor: 'rgba(255, 255, 255, 0.2)',
+     alignItems: 'center',
+     justifyContent: 'center',
+   },
+@@ -263,18 +326,16 @@ const styles = StyleSheet.create({
+     paddingVertical: 6,
+     paddingHorizontal: 12,
+     borderRadius: 999,
+-    backgroundColor: 'rgba(26, 18, 14, 0.78)',
+     borderWidth: 1,
+-    borderColor: 'rgba(255, 224, 185, 0.2)',
+   },
+   reachDot: { width: 8, height: 8, borderRadius: 4 },
+-  heroBadgeText: { fontFamily: fonts.medium, fontSize: 12, color: '#FFF6EB' },
++  heroBadgeText: { fontFamily: fonts.medium, fontSize: 12 },
+   body: { padding: 20, gap: 18 },
+   headerRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 12 },
+   headerText: { flex: 1, alignItems: 'flex-end', gap: 3 },
+-  kindTag: { fontFamily: fonts.semibold, fontSize: 12, color: colors.orangeText },
+-  title: { fontFamily: fonts.bold, fontSize: 24, color: colors.ink, textAlign: 'right' },
+-  subline: { fontFamily: fonts.regular, fontSize: 13, color: colors.muted, textAlign: 'right' },
++  kindTag: { fontFamily: fonts.semibold, fontSize: 12 },
++  title: { fontFamily: fonts.bold, fontSize: 24, textAlign: 'right' },
++  subline: { fontFamily: fonts.regular, fontSize: 13, textAlign: 'right' },
+   pinBadge: { paddingLeft: 4 },
+   ringsCard: {
+     flexDirection: 'row-reverse',
+@@ -282,63 +343,53 @@ const styles = StyleSheet.create({
+     justifyContent: 'space-around',
+     paddingVertical: 14,
+     paddingHorizontal: 10,
+-    backgroundColor: colors.surface,
+     borderRadius: 20,
+     borderWidth: 1,
+-    borderColor: colors.line,
+   },
+   ringItem: { alignItems: 'center', gap: 4, flex: 1 },
+-  ringLabel: { fontFamily: fonts.medium, fontSize: 13, color: colors.inkSoft },
+-  ringDivider: { width: 1, height: 42, backgroundColor: colors.line },
++  ringLabel: { fontFamily: fonts.medium, fontSize: 13 },
++  ringDivider: { width: 1, height: 42 },
+   tagsWrap: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 8 },
+   tag: {
+     paddingVertical: 6,
+     paddingHorizontal: 12,
+     borderRadius: 999,
+-    backgroundColor: colors.sandSoft,
+     borderWidth: 1,
+-    borderColor: colors.line,
+   },
+-  tagText: { fontFamily: fonts.medium, fontSize: 13, color: colors.inkSoft },
++  tagText: { fontFamily: fonts.medium, fontSize: 13 },
+   tagSoft: {
+     paddingVertical: 6,
+     paddingHorizontal: 12,
+     borderRadius: 999,
+-    backgroundColor: colors.orangeSoft,
+   },
+-  tagSoftText: { fontFamily: fonts.semibold, fontSize: 13, color: colors.orangeText },
++  tagSoftText: { fontFamily: fonts.semibold, fontSize: 13 },
+   actions: {
+     flexDirection: 'row-reverse',
+     gap: 10,
+     paddingHorizontal: 20,
+     paddingTop: 10,
+     borderTopWidth: 1,
+-    borderTopColor: colors.line,
+-    backgroundColor: colors.sheet,
+   },
+   primaryBtn: {
+     flex: 1,
+     minHeight: 52,
+     borderRadius: 16,
+-    backgroundColor: colors.obsidian,
+     flexDirection: 'row-reverse',
+     alignItems: 'center',
+     justifyContent: 'center',
+     gap: 8,
+   },
+-  primaryBtnText: { fontFamily: fonts.semibold, fontSize: 16, color: '#FFF7ED' },
++  primaryBtnText: { fontFamily: fonts.semibold, fontSize: 16 },
+   secondaryBtn: {
+     minHeight: 52,
+     paddingHorizontal: 18,
+     borderRadius: 16,
+-    backgroundColor: colors.surface,
+     borderWidth: 1,
+-    borderColor: colors.lineStrong,
+     flexDirection: 'row-reverse',
+     alignItems: 'center',
+     justifyContent: 'center',
+     gap: 7,
+   },
+-  secondaryBtnText: { fontFamily: fonts.semibold, fontSize: 15, color: colors.ink },
++  secondaryBtnText: { fontFamily: fonts.semibold, fontSize: 15 },
+   pressed: { opacity: 0.85, transform: [{ scale: 0.985 }] },
+ });
+diff --git a/apps/sunset-spots/src/components/SpotList.tsx b/apps/sunset-spots/src/components/SpotList.tsx
+index 1932bf4..b1102a9 100644
+--- a/apps/sunset-spots/src/components/SpotList.tsx
++++ b/apps/sunset-spots/src/components/SpotList.tsx
+@@ -4,7 +4,7 @@ import { formatDistance } from '../lib/geo';
+ import type { SpotKind } from '../lib/osm';
+ import type { ScoredSpot } from '../lib/score';
+ import { travelMinutes, type ShownSpot } from '../lib/travel';
+-import { colors, fonts } from '../theme';
++import { fonts, type SkyPhase } from '../theme';
+ import { SpotPin } from './SpotPin';
+ 
+ const KIND_LABEL: Record<SpotKind, string> = {
+@@ -29,19 +29,23 @@ function reachLabel(spot: ShownSpot, driveMin: number, now?: Date, goldenHour?:
+ 
+ export function SpotList({
+   spots,
++  phase,
+   selectedId = null,
+   onSelectSpot,
+   now,
+   goldenHour,
+ }: {
+   spots: ShownSpot[];
++  phase: SkyPhase;
+   selectedId?: string | null;
+   onSelectSpot?: (spot: ShownSpot) => void;
+   now?: Date;
+   goldenHour?: Date;
+ }) {
++  const { ui, map } = phase;
++
+   if (spots.length === 0) {
+-    return <Text style={styles.empty}>{'לא נמצאו מקומות מסומנים בטווח של 10 ק"מ.'}</Text>;
++    return <Text style={[styles.empty, { color: ui.muted }]}>{'לא נמצאו מקומות מסומנים בטווח של 10 ק"מ.'}</Text>;
+   }
+ 
+   const [best, ...rest] = spots;
+@@ -55,42 +59,55 @@ export function SpotList({
+         onPress={() => onSelectSpot?.(best)}
+         style={({ pressed }) => [
+           styles.heroCard,
+-          selectedId === best.id && styles.cardSelected,
++          {
++            backgroundColor: ui.heroBg,
++            borderColor: selectedId === best.id ? ui.selectedBorder : ui.heroBorder,
++            shadowColor: ui.heroShadow,
++          },
+           pressed && styles.pressed,
+         ]}
+         accessibilityRole="button"
+         accessibilityLabel={`המקום המומלץ: ${bestTitle}, ציון ${best.score}`}
+       >
+         <View style={styles.heroTopStrip}>
+-          <View style={styles.topPickPill}>
+-            <Text style={styles.topPickText}>★ הבחירה להערב</Text>
++          <View style={[styles.topPickPill, { backgroundColor: ui.topPickBg }]}>
++            <Text style={[styles.topPickText, { color: ui.topPickText }]}>★ הבחירה להערב</Text>
+           </View>
+           <View style={styles.reachPill}>
+             <View style={[styles.reachDot, { backgroundColor: best.reach.color }]} />
+-            <Text style={styles.reachText}>{reachLabel(best, bestDrive, now, goldenHour)}</Text>
++            <Text style={[styles.reachText, { color: ui.inkSoft }]}>{reachLabel(best, bestDrive, now, goldenHour)}</Text>
+           </View>
+         </View>
+ 
+         <View style={styles.heroMain}>
+-          <SpotPin kind={best.kind} color={best.reach.color} opacity={best.reach.opacity} size={32} shadow />
++          <SpotPin
++            kind={best.kind}
++            color={best.reach.color}
++            opacity={best.reach.opacity}
++            size={32}
++            shadow
++            strokeColor={map.pinStroke}
++            shadowColor={map.pinShadow}
++            shadowOpacity={map.pinShadowOpacity}
++          />
+ 
+           <View style={styles.body}>
+-            <Text style={styles.heroName} numberOfLines={1}>
++            <Text style={[styles.heroName, { color: ui.ink }]} numberOfLines={1}>
+               {bestTitle}
+             </Text>
+-            <Text style={styles.heroMeta} numberOfLines={1}>
++            <Text style={[styles.heroMeta, { color: ui.muted }]} numberOfLines={1}>
+               {`${KIND_LABEL[best.kind]} · ${formatDistance(best.distance)} ממך`}
+             </Text>
+           </View>
+ 
+-          <MiniScoreRing score={best.score} color={best.reach.color} />
++          <MiniScoreRing score={best.score} color={best.reach.color} trackColor={ui.ringTrack} textColor={ui.ink} />
+         </View>
+ 
+         {best.reasons.length > 0 && (
+           <View style={styles.chipsRow}>
+             {best.reasons.slice(0, 3).map((reason) => (
+-              <View key={reason} style={styles.heroChip}>
+-                <Text style={styles.heroChipText}>{reason}</Text>
++              <View key={reason} style={[styles.heroChip, { backgroundColor: ui.chipBg, borderColor: ui.chipBorder }]}>
++                <Text style={[styles.heroChipText, { color: ui.chipText }]}>{reason}</Text>
+               </View>
+             ))}
+           </View>
+@@ -99,23 +116,23 @@ export function SpotList({
+         <View style={styles.heroActions}>
+           <Pressable
+             onPress={() => openWaze(best)}
+-            style={({ pressed }) => [styles.heroWazeBtn, pressed && styles.pressed]}
++            style={({ pressed }) => [styles.heroWazeBtn, { backgroundColor: ui.primaryBtnBg }, pressed && styles.pressed]}
+             accessibilityRole="link"
+             accessibilityLabel={`ניווט ב־Waze אל ${bestTitle}`}
+           >
+             <Svg width={15} height={15} viewBox="0 0 24 24" fill="none">
+-              <Path d="M3 11l18-8-8 18-2-8-8-2z" stroke="#FFF8F0" strokeWidth={2.2} strokeLinejoin="round" />
++              <Path d="M3 11l18-8-8 18-2-8-8-2z" stroke={ui.primaryBtnText} strokeWidth={2.2} strokeLinejoin="round" />
+             </Svg>
+-            <Text style={styles.heroWazeText}>נווט ב־Waze</Text>
++            <Text style={[styles.heroWazeText, { color: ui.primaryBtnText }]}>נווט ב־Waze</Text>
+           </Pressable>
+ 
+           <Pressable
+             onPress={() => onSelectSpot?.(best)}
+-            style={({ pressed }) => [styles.detailsBtn, pressed && styles.pressed]}
++            style={({ pressed }) => [styles.detailsBtn, { backgroundColor: ui.secondaryBtnBg, borderColor: ui.secondaryBtnBorder }, pressed && styles.pressed]}
+             accessibilityRole="button"
+             accessibilityLabel={`פרטים נוספים על ${bestTitle}`}
+           >
+-            <Text style={styles.detailsBtnText}>פרטים וציון</Text>
++            <Text style={[styles.detailsBtnText, { color: ui.secondaryBtnText }]}>פרטים וציון</Text>
+           </Pressable>
+         </View>
+       </Pressable>
+@@ -125,13 +142,18 @@ export function SpotList({
+         const rank = idx + 2;
+         const driveMin = Math.max(1, Math.round(travelMinutes(spot.distance, 'car')));
+         const title = spot.name ?? KIND_LABEL[spot.kind];
++        const selected = selectedId === spot.id;
+         return (
+           <Pressable
+             key={spot.id}
+             onPress={() => onSelectSpot?.(spot)}
+             style={({ pressed }) => [
+               styles.row,
+-              selectedId === spot.id && styles.cardSelected,
++              {
++                backgroundColor: ui.surface,
++                borderColor: selected ? ui.selectedBorder : ui.line,
++                borderWidth: selected ? 1.5 : 1,
++              },
+               !spot.reach.inTime && styles.rowLate,
+               pressed && styles.pressed,
+             ]}
+@@ -139,36 +161,42 @@ export function SpotList({
+             accessibilityLabel={`מקום ${rank}: ${title}, ציון ${spot.score}`}
+           >
+             <View style={styles.pinCol}>
+-              <SpotPin kind={spot.kind} color={spot.reach.color} opacity={spot.reach.opacity} size={27} />
+-              <View style={styles.rankBadge}>
+-                <Text style={styles.rankBadgeText}>{rank}</Text>
++              <SpotPin
++                kind={spot.kind}
++                color={spot.reach.color}
++                opacity={spot.reach.opacity}
++                size={27}
++                strokeColor={map.pinStroke}
++              />
++              <View style={[styles.rankBadge, { backgroundColor: ui.sandSoft, borderColor: ui.lineStrong }]}>
++                <Text style={[styles.rankBadgeText, { color: ui.inkSoft }]}>{rank}</Text>
+               </View>
+             </View>
+ 
+             <View style={styles.body}>
+-              <Text style={styles.name} numberOfLines={1}>
++              <Text style={[styles.name, { color: ui.ink }]} numberOfLines={1}>
+                 {title}
+               </Text>
+-              <Text style={styles.meta} numberOfLines={1}>
++              <Text style={[styles.meta, { color: ui.muted }]} numberOfLines={1}>
+                 {`${formatDistance(spot.distance)} · כ־${driveMin} דק'${spot.reasons.length ? ` · ${spot.reasons.slice(0, 2).join(' · ')}` : ''}`}
+               </Text>
+             </View>
+ 
+-            <View style={styles.scorePill}>
+-              <Text style={styles.scorePillText} accessibilityLabel={`ציון ${spot.score}`}>
++            <View style={[styles.scorePill, { backgroundColor: ui.scorePillBg }]}>
++              <Text style={[styles.scorePillText, { color: ui.scorePillText }]} accessibilityLabel={`ציון ${spot.score}`}>
+                 {spot.score}
+               </Text>
+             </View>
+ 
+             <Pressable
+               onPress={() => openWaze(spot)}
+-              style={({ pressed }) => [styles.wazeCircle, pressed && styles.pressed]}
++              style={({ pressed }) => [styles.wazeCircle, { borderColor: ui.lineStrong, backgroundColor: ui.sheet }, pressed && styles.pressed]}
+               accessibilityRole="link"
+               accessibilityLabel={`ניווט ב־Waze אל ${title}`}
+               hitSlop={6}
+             >
+               <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+-                <Path d="M3 11l18-8-8 18-2-8-8-2z" stroke={colors.ink} strokeWidth={2.1} strokeLinejoin="round" />
++                <Path d="M3 11l18-8-8 18-2-8-8-2z" stroke={ui.ink} strokeWidth={2.1} strokeLinejoin="round" />
+               </Svg>
+             </Pressable>
+           </Pressable>
+@@ -178,13 +206,23 @@ export function SpotList({
+   );
+ }
+ 
+-function MiniScoreRing({ score, color }: { score: number; color: string }) {
++function MiniScoreRing({
++  score,
++  color,
++  trackColor,
++  textColor,
++}: {
++  score: number;
++  color: string;
++  trackColor: string;
++  textColor: string;
++}) {
+   const r = 18;
+   const circ = 2 * Math.PI * r;
+   const dash = (Math.max(0, Math.min(100, score)) / 100) * circ;
+   return (
+     <Svg width={46} height={46} viewBox="0 0 46 46" accessibilityLabel={`ציון ${score}`}>
+-      <Circle cx={23} cy={23} r={r} fill="none" stroke="#F3E2CE" strokeWidth={4} />
++      <Circle cx={23} cy={23} r={r} fill="none" stroke={trackColor} strokeWidth={4} />
+       <Circle
+         cx={23}
+         cy={23}
+@@ -196,7 +234,7 @@ function MiniScoreRing({ score, color }: { score: number; color: string }) {
+         strokeDasharray={`${dash} ${circ}`}
+         transform="rotate(-90 23 23)"
+       />
+-      <SvgText x={23} y={27.5} textAnchor="middle" fontSize={14} fontFamily={fonts.bold} fill={colors.ink}>
++      <SvgText x={23} y={27.5} textAnchor="middle" fontSize={14} fontFamily={fonts.bold} fill={textColor}>
+         {`${score}`}
+       </SvgText>
+     </Svg>
+@@ -208,12 +246,9 @@ const styles = StyleSheet.create({
+   heroCard: {
+     padding: 15,
+     borderRadius: 22,
+-    backgroundColor: '#FFF9F0',
+     borderWidth: 1.5,
+-    borderColor: '#F0CFA3',
+     gap: 12,
+-    shadowColor: '#8A4A18',
+-    shadowOpacity: 0.08,
++    shadowOpacity: 0.09,
+     shadowRadius: 14,
+     shadowOffset: { width: 0, height: 6 },
+     elevation: 3,
+@@ -228,52 +263,46 @@ const styles = StyleSheet.create({
+     paddingVertical: 4,
+     paddingHorizontal: 10,
+     borderRadius: 999,
+-    backgroundColor: colors.obsidian,
+   },
+-  topPickText: { fontFamily: fonts.semibold, fontSize: 11.5, color: '#FBD687' },
++  topPickText: { fontFamily: fonts.semibold, fontSize: 11.5 },
+   reachPill: {
+     flexDirection: 'row-reverse',
+     alignItems: 'center',
+     gap: 6,
+   },
+   reachDot: { width: 7, height: 7, borderRadius: 3.5 },
+-  reachText: { fontFamily: fonts.medium, fontSize: 12, color: colors.inkSoft },
++  reachText: { fontFamily: fonts.medium, fontSize: 12 },
+   heroMain: { flexDirection: 'row-reverse', alignItems: 'center', gap: 11 },
+-  heroName: { fontFamily: fonts.bold, fontSize: 18, color: colors.ink, textAlign: 'right' },
+-  heroMeta: { fontFamily: fonts.regular, fontSize: 12.5, color: colors.muted, textAlign: 'right' },
++  heroName: { fontFamily: fonts.bold, fontSize: 18, textAlign: 'right' },
++  heroMeta: { fontFamily: fonts.regular, fontSize: 12.5, textAlign: 'right' },
+   chipsRow: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 6 },
+   heroChip: {
+     paddingVertical: 4,
+     paddingHorizontal: 10,
+     borderRadius: 999,
+-    backgroundColor: colors.white,
+     borderWidth: 1,
+-    borderColor: '#EEDBC4',
+   },
+-  heroChipText: { fontFamily: fonts.medium, fontSize: 12, color: colors.inkSoft },
++  heroChipText: { fontFamily: fonts.medium, fontSize: 12 },
+   heroActions: { flexDirection: 'row-reverse', gap: 8, paddingTop: 2 },
+   heroWazeBtn: {
+     flex: 1,
+     minHeight: 44,
+     borderRadius: 14,
+-    backgroundColor: colors.obsidian,
+     flexDirection: 'row-reverse',
+     alignItems: 'center',
+     justifyContent: 'center',
+     gap: 7,
+   },
+-  heroWazeText: { fontFamily: fonts.semibold, fontSize: 14, color: '#FFF8F0' },
++  heroWazeText: { fontFamily: fonts.semibold, fontSize: 14 },
+   detailsBtn: {
+     minHeight: 44,
+     paddingHorizontal: 14,
+     borderRadius: 14,
+-    backgroundColor: colors.white,
+     borderWidth: 1,
+-    borderColor: colors.lineStrong,
+     alignItems: 'center',
+     justifyContent: 'center',
+   },
+-  detailsBtnText: { fontFamily: fonts.medium, fontSize: 13.5, color: colors.ink },
++  detailsBtnText: { fontFamily: fonts.medium, fontSize: 13.5 },
+   row: {
+     flexDirection: 'row-reverse',
+     alignItems: 'center',
+@@ -281,12 +310,8 @@ const styles = StyleSheet.create({
+     paddingVertical: 12,
+     paddingHorizontal: 13,
+     borderRadius: 18,
+-    backgroundColor: colors.surface,
+-    borderWidth: 1,
+-    borderColor: colors.line,
+   },
+-  rowLate: { opacity: 0.72 },
+-  cardSelected: { borderColor: colors.orange, borderWidth: 1.5 },
++  rowLate: { opacity: 0.8 },
+   pinCol: { position: 'relative', alignItems: 'center', justifyContent: 'center' },
+   rankBadge: {
+     position: 'absolute',
+@@ -295,35 +320,30 @@ const styles = StyleSheet.create({
+     width: 17,
+     height: 17,
+     borderRadius: 8.5,
+-    backgroundColor: colors.sandSoft,
+     borderWidth: 1,
+-    borderColor: colors.lineStrong,
+     alignItems: 'center',
+     justifyContent: 'center',
+   },
+-  rankBadgeText: { fontFamily: fonts.bold, fontSize: 10, color: colors.inkSoft },
++  rankBadgeText: { fontFamily: fonts.bold, fontSize: 10 },
+   body: { flex: 1, gap: 2, alignItems: 'flex-end' },
+-  name: { fontFamily: fonts.semibold, fontSize: 15.5, color: colors.ink, textAlign: 'right' },
+-  meta: { fontFamily: fonts.regular, fontSize: 12, color: colors.muted, textAlign: 'right' },
++  name: { fontFamily: fonts.semibold, fontSize: 15.5, textAlign: 'right' },
++  meta: { fontFamily: fonts.regular, fontSize: 12, textAlign: 'right' },
+   scorePill: {
+     minWidth: 38,
+     paddingVertical: 5,
+     paddingHorizontal: 8,
+     borderRadius: 10,
+-    backgroundColor: colors.sandSoft,
+     alignItems: 'center',
+   },
+-  scorePillText: { fontFamily: fonts.bold, fontSize: 15, color: colors.orangeText },
++  scorePillText: { fontFamily: fonts.bold, fontSize: 15 },
+   wazeCircle: {
+     width: 40,
+     height: 40,
+     borderRadius: 13,
+     borderWidth: 1,
+-    borderColor: colors.lineStrong,
+-    backgroundColor: colors.sheet,
+     alignItems: 'center',
+     justifyContent: 'center',
+   },
+   pressed: { opacity: 0.86, transform: [{ scale: 0.985 }] },
+-  empty: { fontFamily: fonts.regular, fontSize: 14, color: colors.muted, textAlign: 'center', paddingVertical: 12 },
++  empty: { fontFamily: fonts.regular, fontSize: 14, textAlign: 'center', paddingVertical: 12 },
+ });
+diff --git a/apps/sunset-spots/src/components/SpotMap.tsx b/apps/sunset-spots/src/components/SpotMap.tsx
+index c1c8a4b..86867c7 100644
+--- a/apps/sunset-spots/src/components/SpotMap.tsx
++++ b/apps/sunset-spots/src/components/SpotMap.tsx
+@@ -5,7 +5,7 @@ import type { LatLon } from '../lib/geo';
+ import { edgePoint, layoutLabels, makeProjection, shapePath, type Box, type PlacedLabel, type Projection } from '../lib/mapview';
+ import type { AreaKind, MapLayers } from '../lib/tiles';
+ import type { ShownSpot } from '../lib/travel';
+-import { colors, fonts } from '../theme';
++import { fonts, type MapPalette, type SkyPhase } from '../theme';
+ import { ICON_PATHS, PIN_PATH } from './SpotPin';
+ 
+ const LABELLED = 3;
+@@ -13,7 +13,7 @@ const LABELLED = 3;
+ const STREETS_MAX_RANGE_M = 3500;
+ /**
+  * Road look by rank (0 main roads … 3 streets): main roads chunky and toy-like with a warm outline,
+- * shrinking down to a thin white line, so towns stay crisp and playful.
++ * shrinking down to a thin line, so towns stay crisp and playful.
+  */
+ const ROAD_STYLE = [
+   { edge: 9.5, fill: 6.2 },
+@@ -22,17 +22,6 @@ const ROAD_STYLE = [
+   { edge: 0, fill: 2 },
+ ];
+ 
+-// Sunlit Mediterranean atlas tones: calm, warm backdrop where the chunky white roads,
+-// golden sunset glow and spot pins pop effortlessly.
+-const MAP = {
+-  ground: '#FBF0DF',
+-  field: '#F6E5CC',
+-  green: '#DDE3B8',
+-  water: '#C0DCE0',
+-  town: '#F2DAC1',
+-  roadEdge: '#E8BE96',
+-  label: '#8D5F43',
+-};
+ /** Areas smaller than this (px across) are dropped: scattered specks are noise at this scale. */
+ const MIN_AREA_PX = 8;
+ /** Place names on the map at most. */
+@@ -50,6 +39,7 @@ type Props = {
+   height: number;
+   /** Height covered by the HUD floating over the top of the map. */
+   top?: number;
++  phase: SkyPhase;
+   selectedId?: string | null;
+   onSelectSpot?: (spot: ShownSpot) => void;
+ };
+@@ -62,10 +52,10 @@ const pinSize = (rank: number, selected: boolean) => {
+ };
+ 
+ /**
+- * The main map: north-up, you in the middle, real fields, built-up areas, chunky white roads and
+- * settlement names from OpenFreeMap, sunlit horizon wash, sunset beam, and tappable spot pins.
++ * The main map: north-up, you in the middle, real fields, built-up areas, chunky toy roads and
++ * settlement names from OpenFreeMap, phase-aware horizon wash, sunset beam, and tappable spot pins.
+  */
+-export function SpotMap({ from, sunsetBearing, spots, layers, range, height, top = 0, selectedId = null, onSelectSpot }: Props) {
++export function SpotMap({ from, sunsetBearing, spots, layers, range, height, top = 0, phase, selectedId = null, onSelectSpot }: Props) {
+   const [width, setWidth] = useState(0);
+   const onLayout = (e: LayoutChangeEvent) => setWidth(e.nativeEvent.layout.width);
+   const { lat, lon } = from;
+@@ -89,15 +79,17 @@ export function SpotMap({ from, sunsetBearing, spots, layers, range, height, top
+   }, [layers.places, lat, lon, width, height, range, top, pinKey, bearingKey]);
+ 
+   return (
+-    <View style={[styles.box, { height }]} onLayout={onLayout} accessibilityLabel="מפת המקומות סביבך">
++    <View style={[styles.box, { height, backgroundColor: phase.map.ground }]} onLayout={onLayout} accessibilityLabel="מפת המקומות סביבך">
+       {width > 0 && (
+         <Svg width={width} height={height}>
+-          <BaseLayers lat={lat} lon={lon} width={width} height={height} top={top} range={range} layers={layers} />
++          <BaseLayers lat={lat} lon={lon} width={width} height={height} top={top} range={range} layers={layers} map={phase.map} />
+           <Overlay
+             proj={makeProjection(from, width, height, range, top)}
+             sunsetBearing={sunsetBearing}
+             spots={spots}
+             labels={labels}
++            map={phase.map}
++            isDark={phase.isDark}
+             selectedId={selectedId}
+             onSelectSpot={onSelectSpot}
+           />
+@@ -107,7 +99,7 @@ export function SpotMap({ from, sunsetBearing, spots, layers, range, height, top
+   );
+ }
+ 
+-/** Ground, land use, and chunky white roads: heavy to build, only changes when you move or zoom. */
++/** Ground, land use, and chunky toy roads: heavy to build, only changes when you move, zoom, or cross a sky phase. */
+ const BaseLayers = memo(function BaseLayers({
+   lat,
+   lon,
+@@ -116,6 +108,7 @@ const BaseLayers = memo(function BaseLayers({
+   top,
+   range,
+   layers,
++  map,
+ }: {
+   lat: number;
+   lon: number;
+@@ -124,6 +117,7 @@ const BaseLayers = memo(function BaseLayers({
+   top: number;
+   range: number;
+   layers: MapLayers;
++  map: MapPalette;
+ }) {
+   const shapes = useMemo(() => {
+     const proj = makeProjection({ lat, lon }, width, height, range, top);
+@@ -143,37 +137,39 @@ const BaseLayers = memo(function BaseLayers({
+   }, [lat, lon, width, height, top, range, layers]);
+ 
+   const areaFill: Record<AreaKind, string> = {
+-    field: MAP.field,
+-    green: MAP.green,
+-    water: MAP.water,
+-    town: MAP.town,
++    field: map.field,
++    green: map.green,
++    water: map.water,
++    town: map.town,
+   };
+ 
+   return (
+     <G>
+-      <Rect x={0} y={0} width={width} height={height} fill={MAP.ground} />
++      <Rect x={0} y={0} width={width} height={height} fill={map.ground} />
+       {shapes.areas.map((a) => (
+         // No outlines: areas arrive cut at tile edges, and an outline would trace those cuts.
+         <Path key={a.id} d={a.d} fill={areaFill[a.kind]} />
+       ))}
+       {shapes.roads.map((r) =>
+         ROAD_STYLE[r.rank].edge ? (
+-          <Path key={`${r.id}-c`} d={r.d} fill="none" stroke={MAP.roadEdge} strokeWidth={ROAD_STYLE[r.rank].edge} strokeLinecap="round" strokeLinejoin="round" />
++          <Path key={`${r.id}-c`} d={r.d} fill="none" stroke={map.roadEdge} strokeWidth={ROAD_STYLE[r.rank].edge} strokeLinecap="round" strokeLinejoin="round" />
+         ) : null,
+       )}
+       {shapes.roads.map((r) => (
+-        <Path key={r.id} d={r.d} fill="none" stroke={colors.white} strokeWidth={ROAD_STYLE[r.rank].fill} strokeLinecap="round" strokeLinejoin="round" />
++        <Path key={r.id} d={r.d} fill="none" stroke={map.roadFill} strokeWidth={ROAD_STYLE[r.rank].fill} strokeLinecap="round" strokeLinejoin="round" />
+       ))}
+     </G>
+   );
+ });
+ 
+-/** Sunlit horizon wash, sunset beam, sun disc, place names, tappable spot pins and you. */
++/** Horizon wash, sunset beam, sun/sunset marker, place names, tappable spot pins and you. */
+ function Overlay({
+   proj,
+   sunsetBearing,
+   spots,
+   labels,
++  map,
++  isDark,
+   selectedId,
+   onSelectSpot,
+ }: {
+@@ -181,6 +177,8 @@ function Overlay({
+   sunsetBearing: number;
+   spots: ShownSpot[];
+   labels: PlacedLabel[];
++  map: MapPalette;
++  isDark: boolean;
+   selectedId: string | null;
+   onSelectSpot?: (spot: ShownSpot) => void;
+ }) {
+@@ -204,44 +202,44 @@ function Overlay({
+     <G>
+       <Defs>
+         <RadialGradient id="horizonWash" cx={sun.x} cy={sun.y} r={Math.max(width, height) * 0.58} gradientUnits="userSpaceOnUse">
+-          <Stop offset="0" stopColor="#FF9E40" stopOpacity="0.24" />
+-          <Stop offset="0.45" stopColor="#F5B44A" stopOpacity="0.09" />
+-          <Stop offset="1" stopColor="#F5B44A" stopOpacity="0" />
++          <Stop offset="0" stopColor={map.horizonStart} stopOpacity={map.horizonStartOpacity} />
++          <Stop offset="0.45" stopColor={map.horizonMid} stopOpacity={map.horizonMidOpacity} />
++          <Stop offset="1" stopColor={map.horizonMid} stopOpacity="0" />
+         </RadialGradient>
+         <RadialGradient id="mapBeam" cx={center.x} cy={center.y} r={far * 0.52} gradientUnits="userSpaceOnUse">
+-          <Stop offset="0" stopColor="#F2A92C" stopOpacity="0.42" />
+-          <Stop offset="0.65" stopColor="#E55B24" stopOpacity="0.16" />
+-          <Stop offset="1" stopColor="#E55B24" stopOpacity="0" />
++          <Stop offset="0" stopColor={map.beamStart} stopOpacity={map.beamStartOpacity} />
++          <Stop offset="0.65" stopColor={map.beamEnd} stopOpacity={map.beamEndOpacity} />
++          <Stop offset="1" stopColor={map.beamEnd} stopOpacity="0" />
+         </RadialGradient>
+         <RadialGradient id="mapSunGlow" cx="50%" cy="50%" r="50%">
+-          <Stop offset="0" stopColor="#FFF5D4" stopOpacity="0.95" />
+-          <Stop offset="0.45" stopColor="#F5A623" stopOpacity="0.55" />
+-          <Stop offset="1" stopColor="#E55B24" stopOpacity="0" />
++          <Stop offset="0" stopColor={map.sunGlowCore} stopOpacity={isDark ? 0.55 : 0.95} />
++          <Stop offset="0.45" stopColor={map.sunGlowMid} stopOpacity={isDark ? 0.28 : 0.55} />
++          <Stop offset="1" stopColor={map.sunGlowEdge} stopOpacity="0" />
+         </RadialGradient>
+         <LinearGradient id="bottomFade" x1="0" y1="0" x2="0" y2="1">
+-          <Stop offset="0" stopColor="#1A120E" stopOpacity="0" />
+-          <Stop offset="1" stopColor="#1A120E" stopOpacity="0.14" />
++          <Stop offset="0" stopColor={map.scrimColor} stopOpacity="0" />
++          <Stop offset="1" stopColor={map.scrimColor} stopOpacity={map.scrimOpacity} />
+         </LinearGradient>
+       </Defs>
+ 
+-      {/* Soft warm sunset wash across the horizon edge of the map */}
++      {/* Atmospheric horizon wash */}
+       <Rect x={0} y={0} width={width} height={height} fill="url(#horizonWash)" />
+ 
+       {/* Focused sunset light cone from your location */}
+       <Path d={`M ${center.x} ${center.y} L ${beamLeft.x} ${beamLeft.y} L ${beamRight.x} ${beamRight.y} Z`} fill="url(#mapBeam)" />
+ 
+-      {/* Radiant sun disc at the horizon edge */}
+-      <Circle cx={sun.x} cy={sun.y} r={28} fill="url(#mapSunGlow)" />
+-      <Circle cx={sun.x} cy={sun.y} r={12.5} fill="#F59326" stroke={colors.white} strokeWidth={3} />
+-      <Circle cx={sun.x} cy={sun.y} r={5} fill="#FFF3C8" />
++      {/* Sun or post-sunset direction marker at the horizon edge */}
++      <Circle cx={sun.x} cy={sun.y} r={isDark ? 24 : 28} fill="url(#mapSunGlow)" />
++      <Circle cx={sun.x} cy={sun.y} r={isDark ? 11 : 12.5} fill={map.sunFill} stroke={map.sunStroke} strokeWidth={isDark ? 2.2 : 3} />
++      <Circle cx={sun.x} cy={sun.y} r={isDark ? 4 : 5} fill={map.sunCore} />
+ 
+-      {/* Settlement labels with crisp cream halo */}
++      {/* Settlement labels with crisp halo matching the ground */}
+       {labels.map((l) => (
+         <G key={l.id}>
+-          <SvgText x={l.x} y={l.y} fontSize={l.fontSize} fontFamily={fonts.semibold} fill={MAP.ground} stroke={MAP.ground} strokeWidth={4.5} strokeLinejoin="round" textAnchor="middle">
++          <SvgText x={l.x} y={l.y} fontSize={l.fontSize} fontFamily={fonts.semibold} fill={map.labelHalo} stroke={map.labelHalo} strokeWidth={4.5} strokeLinejoin="round" textAnchor="middle">
+             {l.name}
+           </SvgText>
+-          <SvgText x={l.x} y={l.y} fontSize={l.fontSize} fontFamily={fonts.semibold} fill={MAP.label} textAnchor="middle">
++          <SvgText x={l.x} y={l.y} fontSize={l.fontSize} fontFamily={fonts.semibold} fill={map.label} textAnchor="middle">
+             {l.name}
+           </SvgText>
+         </G>
+@@ -258,12 +256,12 @@ function Overlay({
+         const { w, h } = pinSize(rank, selected);
+         return (
+           <G key={spot.id} opacity={spot.reach.opacity} onPress={onSelectSpot ? () => onSelectSpot(spot) : undefined}>
+-            {selected && <Circle cx={p.x} cy={p.y - h * 0.55} r={w * 0.72} fill={spot.reach.color} opacity={0.22} />}
+-            <Ellipse cx={p.x} cy={p.y + 1} rx={w * 0.25} ry={3.2} fill="#2A1A12" opacity={0.2} />
++            {selected && <Circle cx={p.x} cy={p.y - h * 0.55} r={w * 0.72} fill={spot.reach.color} opacity={isDark ? 0.34 : 0.24} />}
++            <Ellipse cx={p.x} cy={p.y + 1} rx={w * 0.25} ry={3.2} fill={map.pinShadow} opacity={map.pinShadowOpacity} />
+             <G transform={`translate(${p.x - w / 2} ${p.y - h}) scale(${w / 40})`}>
+-              <Path d={PIN_PATH} fill={spot.reach.color} stroke={colors.white} strokeWidth={selected ? 3.6 : 3} />
++              <Path d={PIN_PATH} fill={spot.reach.color} stroke={map.pinStroke} strokeWidth={selected ? 3.6 : 3} />
+               <G transform="translate(10 9) scale(0.8333)">
+-                <Path d={ICON_PATHS[spot.kind]} fill="none" stroke={colors.white} strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" />
++                <Path d={ICON_PATHS[spot.kind]} fill="none" stroke="#FFFFFF" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" />
+               </G>
+             </G>
+             {rank < LABELLED && (
+@@ -272,8 +270,8 @@ function Overlay({
+                   cx={p.x + w / 2 - 1}
+                   cy={p.y - h + 5}
+                   r={rank === 0 ? 9.5 : 8}
+-                  fill={rank === 0 ? colors.obsidian : colors.white}
+-                  stroke={rank === 0 ? colors.white : colors.line}
++                  fill={rank === 0 ? map.rankTopBg : map.rankBg}
++                  stroke={rank === 0 ? map.rankTopStroke : map.rankStroke}
+                   strokeWidth={rank === 0 ? 1.8 : 1}
+                 />
+                 <SvgText
+@@ -281,7 +279,7 @@ function Overlay({
+                   y={p.y - h + (rank === 0 ? 9 : 8.8)}
+                   fontSize={rank === 0 ? 11 : 10.5}
+                   fontFamily={fonts.bold}
+-                  fill={rank === 0 ? '#FBD687' : colors.ink}
++                  fill={rank === 0 ? map.rankTopText : map.rankText}
+                   textAnchor="middle"
+                 >
+                   {`${rank + 1}`}
+@@ -293,13 +291,13 @@ function Overlay({
+       })}
+ 
+       {/* Your current location dot */}
+-      <Circle cx={center.x} cy={center.y} r={19} fill={colors.obsidian} opacity={0.1} />
+-      <Circle cx={center.x} cy={center.y} r={10.5} fill={colors.white} />
+-      <Circle cx={center.x} cy={center.y} r={6} fill={colors.obsidian} />
++      <Circle cx={center.x} cy={center.y} r={19} fill={map.userHalo} opacity={map.userHaloOpacity} />
++      <Circle cx={center.x} cy={center.y} r={10.5} fill={map.userRing} />
++      <Circle cx={center.x} cy={center.y} r={6} fill={map.userCore} />
+     </G>
+   );
+ }
+ 
+ const styles = StyleSheet.create({
+-  box: { overflow: 'hidden', backgroundColor: MAP.ground },
++  box: { overflow: 'hidden' },
+ });
+diff --git a/apps/sunset-spots/src/components/SpotPin.tsx b/apps/sunset-spots/src/components/SpotPin.tsx
+index be19f32..afb72e1 100644
+--- a/apps/sunset-spots/src/components/SpotPin.tsx
++++ b/apps/sunset-spots/src/components/SpotPin.tsx
+@@ -23,17 +23,23 @@ export function SpotPin({
+   opacity = 1,
+   size = 32,
+   shadow = false,
++  strokeColor = colors.white,
++  shadowColor = '#2A1A12',
++  shadowOpacity = 0.18,
+ }: {
+   kind: SpotKind;
+   color: string;
+   opacity?: number;
+   size?: number;
+   shadow?: boolean;
++  strokeColor?: string;
++  shadowColor?: string;
++  shadowOpacity?: number;
+ }) {
+   return (
+     <Svg width={size} height={size * 1.28} viewBox="0 0 40 52" opacity={opacity} accessibilityElementsHidden importantForAccessibility="no">
+-      {shadow && <Ellipse cx={20} cy={48.5} rx={8} ry={2.8} fill="#2A1A12" opacity={0.18} />}
+-      <Path d={PIN_PATH} fill={color} stroke={colors.white} strokeWidth={3} />
++      {shadow && <Ellipse cx={20} cy={48.5} rx={8} ry={2.8} fill={shadowColor} opacity={shadowOpacity} />}
++      <Path d={PIN_PATH} fill={color} stroke={strokeColor} strokeWidth={3} />
+       <G transform="translate(10 9) scale(0.8333)">
+         <Path d={ICON_PATHS[kind]} fill="none" stroke={colors.white} strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" />
+       </G>
+diff --git a/apps/sunset-spots/src/components/SunCompass.tsx b/apps/sunset-spots/src/components/SunCompass.tsx
+index 7c0bc10..24d8f52 100644
+--- a/apps/sunset-spots/src/components/SunCompass.tsx
++++ b/apps/sunset-spots/src/components/SunCompass.tsx
+@@ -2,7 +2,7 @@ import { memo } from 'react';
+ import { View } from 'react-native';
+ import Animated, { useAnimatedStyle, type SharedValue } from 'react-native-reanimated';
+ import Svg, { Circle, Defs, Line, Path, RadialGradient, Stop, Text as SvgText } from 'react-native-svg';
+-import { colors, fonts } from '../theme';
++import { fonts, type SkyPhase } from '../theme';
+ 
+ type Props = {
+   /** Compass bearing of the sunset, degrees from north. */
+@@ -15,6 +15,7 @@ type Props = {
+   /** Whether there's a live heading; without one the dial stays north-up and the pointer is hidden. */
+   live: boolean;
+   aligned: boolean;
++  compass: SkyPhase['compass'];
+   size?: number;
+ };
+ 
+@@ -25,7 +26,7 @@ const CARDINALS = [
+   { label: 'מע', bearing: 270 },
+ ];
+ 
+-export function SunCompass({ bearing, rotation, live, aligned, size = 300 }: Props) {
++export function SunCompass({ bearing, rotation, live, aligned, compass, size = 300 }: Props) {
+   const c = size / 2;
+   const ring = size * 0.39;
+   const spin = useAnimatedStyle(() => ({ transform: [{ rotate: `${rotation.value}deg` }] }));
+@@ -33,14 +34,14 @@ export function SunCompass({ bearing, rotation, live, aligned, size = 300 }: Pro
+   return (
+     <View style={{ width: size, height: size }} accessibilityLabel="מצפן שמראה את כיוון השקיעה">
+       <Animated.View style={[{ width: size, height: size }, spin]}>
+-        <Dial bearing={bearing} aligned={aligned} size={size} />
++        <Dial bearing={bearing} aligned={aligned} compass={compass} size={size} />
+       </Animated.View>
+ 
+       {live && (
+         <Svg width={size} height={size} style={{ position: 'absolute' }} pointerEvents="none">
+           <Path
+             d={`M ${c} ${c - ring - 6} l -8 -14 h 16 z`}
+-            fill={aligned ? '#FFBA49' : '#FFF4E6'}
++            fill={aligned ? compass.pointerAligned : compass.pointer}
+           />
+         </Svg>
+       )}
+@@ -48,8 +49,18 @@ export function SunCompass({ bearing, rotation, live, aligned, size = 300 }: Pro
+   );
+ }
+ 
+-/** Precision twilight solar dial. Only redrawn when the bearing or alignment changes. */
+-const Dial = memo(function Dial({ bearing, aligned, size }: { bearing: number; aligned: boolean; size: number }) {
++/** Precision twilight solar dial. Only redrawn when the bearing, alignment, or sky phase changes. */
++const Dial = memo(function Dial({
++  bearing,
++  aligned,
++  compass,
++  size,
++}: {
++  bearing: number;
++  aligned: boolean;
++  compass: SkyPhase['compass'];
++  size: number;
++}) {
+   const c = size / 2;
+   const ring = size * 0.39;
+   const point = (b: number, r: number) => {
+@@ -65,24 +76,24 @@ const Dial = memo(function Dial({ bearing, aligned, size }: { bearing: number; a
+     <Svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+       <Defs>
+         <RadialGradient id="dialFace" cx="50%" cy="50%" r="50%">
+-          <Stop offset="0" stopColor="#2B1E17" />
+-          <Stop offset="1" stopColor="#1B120E" />
++          <Stop offset="0" stopColor={compass.dialCenter} />
++          <Stop offset="1" stopColor={compass.dialEdge} />
+         </RadialGradient>
+         <RadialGradient id="beam" cx={c} cy={c} r={ring} gradientUnits="userSpaceOnUse">
+-          <Stop offset="0" stopColor="#F5A623" stopOpacity="0.06" />
+-          <Stop offset="0.6" stopColor="#F5A623" stopOpacity="0.28" />
+-          <Stop offset="1" stopColor="#FF7A30" stopOpacity="0.65" />
++          <Stop offset="0" stopColor={compass.beam0} stopOpacity="0.06" />
++          <Stop offset="0.6" stopColor={compass.beam1} stopOpacity="0.28" />
++          <Stop offset="1" stopColor={compass.beam2} stopOpacity="0.65" />
+         </RadialGradient>
+         <RadialGradient id="sunGlow" cx="50%" cy="50%" r="50%">
+-          <Stop offset="0" stopColor="#FFF5D6" stopOpacity="1" />
+-          <Stop offset="0.38" stopColor="#F7B334" stopOpacity="0.85" />
+-          <Stop offset="0.72" stopColor={colors.orange} stopOpacity="0.3" />
+-          <Stop offset="1" stopColor={colors.orange} stopOpacity="0" />
++          <Stop offset="0" stopColor={compass.sunGlow0} stopOpacity="1" />
++          <Stop offset="0.38" stopColor={compass.sunGlow1} stopOpacity="0.85" />
++          <Stop offset="0.72" stopColor={compass.sunGlow2} stopOpacity="0.3" />
++          <Stop offset="1" stopColor={compass.sunGlow2} stopOpacity="0" />
+         </RadialGradient>
+       </Defs>
+ 
+       {/* Outer atmospheric halo when aligned */}
+-      {aligned && <Circle cx={c} cy={c} r={ring + 10} fill="none" stroke="#F7B334" strokeWidth={2} opacity={0.45} />}
++      {aligned && <Circle cx={c} cy={c} r={ring + 10} fill="none" stroke={compass.alignedBorder} strokeWidth={2} opacity={0.5} />}
+ 
+       {/* Dial body */}
+       <Circle
+@@ -90,13 +101,13 @@ const Dial = memo(function Dial({ bearing, aligned, size }: { bearing: number; a
+         cy={c}
+         r={ring}
+         fill="url(#dialFace)"
+-        stroke={aligned ? '#F7B334' : 'rgba(255, 224, 185, 0.22)'}
++        stroke={aligned ? compass.alignedBorder : compass.dialRing}
+         strokeWidth={aligned ? 3 : 1.5}
+       />
+ 
+       {/* Inner precision rings */}
+-      <Circle cx={c} cy={c} r={ring * 0.68} fill="none" stroke="rgba(255, 224, 185, 0.08)" strokeWidth={1} />
+-      <Circle cx={c} cy={c} r={ring * 0.34} fill="none" stroke="rgba(255, 224, 185, 0.08)" strokeWidth={1} />
++      <Circle cx={c} cy={c} r={ring * 0.68} fill="none" stroke={compass.dialInnerRing} strokeWidth={1} />
++      <Circle cx={c} cy={c} r={ring * 0.34} fill="none" stroke={compass.dialInnerRing} strokeWidth={1} />
+ 
+       {/* 72 precision ticks (every 5°) */}
+       {Array.from({ length: 72 }, (_, i) => {
+@@ -112,7 +123,7 @@ const Dial = memo(function Dial({ bearing, aligned, size }: { bearing: number; a
+             y1={inner.y}
+             x2={outer.x}
+             y2={outer.y}
+-            stroke={cardinal ? (b === 0 ? '#FF6B35' : '#FCECD8') : medium ? 'rgba(252, 236, 216, 0.45)' : 'rgba(252, 236, 216, 0.18)'}
++            stroke={cardinal ? (b === 0 ? compass.tickNorth : compass.tickMajor) : medium ? compass.tickMedium : compass.tickMinor}
+             strokeWidth={cardinal ? 2.4 : medium ? 1.5 : 1}
+             strokeLinecap="round"
+           />
+@@ -129,7 +140,7 @@ const Dial = memo(function Dial({ bearing, aligned, size }: { bearing: number; a
+             y={p.y + 6}
+             fontSize={16}
+             fontFamily={fonts.bold}
+-            fill={b === 0 ? '#FF7842' : '#E8D5C1'}
++            fill={b === 0 ? compass.tickNorth : compass.cardinal}
+             textAnchor="middle"
+           >
+             {label}
+@@ -142,11 +153,11 @@ const Dial = memo(function Dial({ bearing, aligned, size }: { bearing: number; a
+ 
+       {/* Glowing sun on the bezel */}
+       <Circle cx={sun.x} cy={sun.y} r={34} fill="url(#sunGlow)" />
+-      <Circle cx={sun.x} cy={sun.y} r={12.5} fill="#FF732E" stroke="#FFF4DC" strokeWidth={2.5} />
++      <Circle cx={sun.x} cy={sun.y} r={12.5} fill={compass.sunFill} stroke={compass.sunStroke} strokeWidth={2.5} />
+ 
+       {/* Center pivot */}
+-      <Circle cx={c} cy={c} r={10} fill="#2B1E17" stroke="rgba(255, 224, 185, 0.4)" strokeWidth={1.5} />
+-      <Circle cx={c} cy={c} r={4.5} fill="#FFF3E2" />
++      <Circle cx={c} cy={c} r={10} fill={compass.pivotBg} stroke={compass.pivotStroke} strokeWidth={1.5} />
++      <Circle cx={c} cy={c} r={4.5} fill={compass.pivotDot} />
+     </Svg>
+   );
+ });
+diff --git a/apps/sunset-spots/src/lib/sun.ts b/apps/sunset-spots/src/lib/sun.ts
+index 17c66e0..cea46a7 100644
+--- a/apps/sunset-spots/src/lib/sun.ts
++++ b/apps/sunset-spots/src/lib/sun.ts
+@@ -10,8 +10,17 @@ export type SunsetInfo = {
+   isTomorrow: boolean;
+ };
+ 
++export type DaySunBounds = {
++  /** Most recent sunset at or before `now`, or null if none (polar day/night). */
++  lastSunset: Date | null;
++  /** Sunrise for `now`'s solar day, or null if none. */
++  sunrise: Date | null;
++};
++
+ const DAY_MS = 24 * 60 * 60 * 1000;
+ 
++const validDate = (d?: Date): Date | null => (d && !Number.isNaN(d.getTime()) ? d : null);
++
+ export function normalizeBearing(degrees: number): number {
+   return ((degrees % 360) + 360) % 360;
+ }
+@@ -31,6 +40,22 @@ export function getSunsetInfo(lat: number, lon: number, now: Date = new Date()):
+   return { sunset, goldenHour, bearing: normalizeBearing(azimuth), isTomorrow };
+ }
+ 
++/**
++ * Returns the most recent sunset (<= `now`) and `now`'s sunrise.
++ * After sunset `getSunsetInfo` already rolls over to tomorrow's sunset, so detecting the
++ * post-sunset blue hour and pre-dawn night needs today's actual bounds.
++ */
++export function getDaySunBounds(lat: number, lon: number, now: Date = new Date()): DaySunBounds {
++  const t = now.getTime();
++  const today = getTimes(now, lat, lon);
++  let lastSunset = validDate(today.sunset);
++  if (lastSunset && lastSunset.getTime() > t) {
++    const yesterday = validDate(getTimes(new Date(t - DAY_MS), lat, lon).sunset);
++    lastSunset = yesterday && yesterday.getTime() <= t ? yesterday : null;
++  }
++  return { lastSunset, sunrise: validDate(today.sunrise) };
++}
++
+ // Eight points are plenty to know which way to face, and short enough to read at a glance.
+ // Across Israel the sunset is always דרום־מערב, מערב or צפון־מערב.
+ const DIRECTIONS = ['צפון', 'צפון־מזרח', 'מזרח', 'דרום־מזרח', 'דרום', 'דרום־מערב', 'מערב', 'צפון־מערב'];
+diff --git a/apps/sunset-spots/src/theme.ts b/apps/sunset-spots/src/theme.ts
+index 1b5ccc8..90115d7 100644
+--- a/apps/sunset-spots/src/theme.ts
++++ b/apps/sunset-spots/src/theme.ts
+@@ -1,7 +1,10 @@
+-// "Sunlit Atlas" palette for Spotlight: warm sunlit parchment paired with deep espresso-obsidian
+-// chrome and a living sunset accent that shifts gently with the time of day.
++import { getDaySunBounds, getSunsetInfo, type DaySunBounds } from './lib/sun.ts';
++
++// "Sunlit Atlas" palette for Spotlight: shifts gracefully across 4 times of day —
++// sunlit gold in the afternoon, warm apricot/orange before sunset, rose-violet in the blue hour,
++// and calm starlit dark mode at night.
+ export const colors = {
+-  // Warm parchment & crisp card hierarchy
++  // Warm parchment & crisp card hierarchy (baseline daytime defaults)
+   ground: '#F5EDE3',
+   sheet: '#FCF8F2',
+   surface: '#FFFFFF',
+@@ -15,15 +18,15 @@ export const colors = {
+   obsidianBorder: 'rgba(255, 224, 185, 0.14)',
+   ink: '#21150F',
+   inkSoft: '#4E3527',
+-  muted: '#7B5C4B',
+-  mutedSoft: '#9D7F6E',
++  muted: '#6D4F3E',
++  mutedSoft: '#745746',
+   line: '#EAE0D3',
+   lineStrong: '#DECDBB',
+ 
+   // Solar & reach accents
+   orange: '#E55B24',
+   orangeSoft: '#FBE6DA',
+-  orangeText: '#B54215',
++  orangeText: '#A84014',
+   gold: '#F2A92C',
+   goldSoft: '#FDF2D6',
+   goldText: '#9A6307',
+@@ -39,69 +42,895 @@ export const fonts = {
+   bold: 'Rubik_700Bold',
+ };
+ 
++export type SkyPhaseId = 'afternoon' | 'golden' | 'blue' | 'night';
++
++export type MapPalette = {
++  ground: string;
++  field: string;
++  green: string;
++  water: string;
++  town: string;
++  roadFill: string;
++  roadEdge: string;
++  label: string;
++  labelHalo: string;
++  horizonStart: string;
++  horizonStartOpacity: number;
++  horizonMid: string;
++  horizonMidOpacity: number;
++  beamStart: string;
++  beamStartOpacity: number;
++  beamEnd: string;
++  beamEndOpacity: number;
++  sunGlowCore: string;
++  sunGlowMid: string;
++  sunGlowEdge: string;
++  sunFill: string;
++  sunStroke: string;
++  sunCore: string;
++  scrimColor: string;
++  scrimOpacity: number;
++  pinStroke: string;
++  pinShadow: string;
++  pinShadowOpacity: number;
++  userHalo: string;
++  userHaloOpacity: number;
++  userRing: string;
++  userCore: string;
++  rankTopBg: string;
++  rankTopStroke: string;
++  rankTopText: string;
++  rankBg: string;
++  rankStroke: string;
++  rankText: string;
++};
++
+ export type SkyPhase = {
+-  id: 'afternoon' | 'golden' | 'imminent' | 'twilight';
++  id: SkyPhaseId;
++  isDark: boolean;
++  statusBarStyle: 'dark' | 'light';
+   label: string;
+   accent: string;
+   glow: string;
+   badgeBg: string;
+   badgeText: string;
+-  /** Progress 0..1 from 2 hours before sunset through sunset itself. */
++  /** Progress 0..1 across the active solar window. */
+   progress: number;
++  hud: {
++    bg: string;
++    border: string;
++    shadow: string;
++    iconBoxBg: string;
++    iconBoxBorder: string;
++    horizonLine: string;
++    label: string;
++    time: string;
++    countdownCaption: string;
++    trackBg: string;
++    meta: string;
++  };
++  ui: {
++    sheet: string;
++    sheetTopBorder: string;
++    surface: string;
++    sand: string;
++    sandSoft: string;
++    handle: string;
++    ink: string;
++    inkSoft: string;
++    muted: string;
++    mutedSoft: string;
++    line: string;
++    lineStrong: string;
++    heroBg: string;
++    heroBorder: string;
++    heroShadow: string;
++    topPickBg: string;
++    topPickText: string;
++    chipBg: string;
++    chipBorder: string;
++    chipText: string;
++    primaryBtnBg: string;
++    primaryBtnText: string;
++    secondaryBtnBg: string;
++    secondaryBtnBorder: string;
++    secondaryBtnText: string;
++    scorePillBg: string;
++    scorePillText: string;
++    ringTrack: string;
++    ringView: string;
++    ringAccess: string;
++    ringPleasant: string;
++    tagSoftBg: string;
++    tagSoftText: string;
++    kindText: string;
++    selectedBorder: string;
++    scrim: string;
++    heroBadgeBg: string;
++    heroBadgeBorder: string;
++    heroBadgeText: string;
++    fabBg: string;
++    fabBorder: string;
++    fabRing: string;
++    fabNorth: string;
++    fabSouth: string;
++  };
++  horizon: {
++    sky0: string;
++    sky1: string;
++    sky2: string;
++    sky3: string;
++    sunY: number;
++    sunGlowOpacity: number;
++    sunCore: string;
++    sunEdge: string;
++    seaFill: string;
++    seaGlow: string;
++    seaWave: string;
++    ridgeBack: string;
++    ridgeFront: string;
++    openBack: string;
++    openFront: string;
++    starsOpacity: number;
++  };
++  compass: {
++    bg: string;
++    pillBg: string;
++    pillBorder: string;
++    title: string;
++    subtitle: string;
++    hint: string;
++    alignedBg: string;
++    alignedBorder: string;
++    alignedText: string;
++    closeBg: string;
++    closeBorder: string;
++    closeText: string;
++    dialCenter: string;
++    dialEdge: string;
++    dialRing: string;
++    dialInnerRing: string;
++    tickMajor: string;
++    tickNorth: string;
++    tickMedium: string;
++    tickMinor: string;
++    cardinal: string;
++    beam0: string;
++    beam1: string;
++    beam2: string;
++    sunFill: string;
++    sunStroke: string;
++    sunGlow0: string;
++    sunGlow1: string;
++    sunGlow2: string;
++    pivotBg: string;
++    pivotStroke: string;
++    pivotDot: string;
++    pointer: string;
++    pointerAligned: string;
++  };
++  map: MapPalette;
+ };
+ 
+-const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
++type StaticPhaseTheme = Omit<SkyPhase, 'label' | 'progress'>;
+ 
+-/** Shifts subtle HUD accents and copy to match how close tonight's sunset is. */
+-export function getSkyPhase(now: Date, goldenHour: Date, sunset: Date, isTomorrow: boolean): SkyPhase {
+-  const msToSunset = sunset.getTime() - now.getTime();
+-  const msToGolden = goldenHour.getTime() - now.getTime();
++export const PHASE_THEMES: Record<SkyPhaseId, StaticPhaseTheme> = {
++  afternoon: {
++    id: 'afternoon',
++    isDark: false,
++    statusBarStyle: 'dark',
++    accent: '#F2B23E',
++    glow: 'rgba(242, 178, 62, 0.25)',
++    badgeBg: 'rgba(242, 178, 62, 0.20)',
++    badgeText: '#FDE8B4',
++    hud: {
++      bg: 'rgba(28, 19, 13, 0.92)',
++      border: 'rgba(255, 224, 185, 0.16)',
++      shadow: '#1A120E',
++      iconBoxBg: 'rgba(255, 224, 185, 0.08)',
++      iconBoxBorder: 'rgba(255, 224, 185, 0.14)',
++      horizonLine: 'rgba(255, 235, 210, 0.45)',
++      label: '#D2BDA9',
++      time: '#FFF8F0',
++      countdownCaption: 'rgba(255, 236, 212, 0.78)',
++      trackBg: 'rgba(255, 236, 212, 0.14)',
++      meta: '#E2CEBC',
++    },
++    ui: {
++      sheet: '#FCF8F2',
++      sheetTopBorder: 'transparent',
++      surface: '#FFFFFF',
++      sand: '#F5E5D2',
++      sandSoft: '#FBF3E8',
++      handle: '#DECDBB',
++      ink: '#21150F',
++      inkSoft: '#4E3527',
++      muted: '#6D4F3E',
++      mutedSoft: '#745746',
++      line: '#EAE0D3',
++      lineStrong: '#DECDBB',
++      heroBg: '#FFF9EE',
++      heroBorder: '#EED0A2',
++      heroShadow: '#8A4A18',
++      topPickBg: '#1C130D',
++      topPickText: '#FBD687',
++      chipBg: '#FFFFFF',
++      chipBorder: '#EEDBC4',
++      chipText: '#4E3527',
++      primaryBtnBg: '#1C130D',
++      primaryBtnText: '#FFF8F0',
++      secondaryBtnBg: '#FFFFFF',
++      secondaryBtnBorder: '#DECDBB',
++      secondaryBtnText: '#21150F',
++      scorePillBg: '#FBF3E8',
++      scorePillText: '#A84014',
++      ringTrack: '#F3E2CE',
++      ringView: '#E55B24',
++      ringAccess: '#D98E14',
++      ringPleasant: '#527041',
++      tagSoftBg: '#FBE6DA',
++      tagSoftText: '#A84014',
++      kindText: '#A84014',
++      selectedBorder: '#E55B24',
++      scrim: 'rgba(20, 13, 9, 0.48)',
++      heroBadgeBg: 'rgba(26, 18, 14, 0.80)',
++      heroBadgeBorder: 'rgba(255, 224, 185, 0.22)',
++      heroBadgeText: '#FFF6EB',
++      fabBg: '#1C130D',
++      fabBorder: 'rgba(255, 224, 185, 0.22)',
++      fabRing: 'rgba(255, 236, 212, 0.72)',
++      fabNorth: '#F5A623',
++      fabSouth: '#EEDAC4',
++    },
++    horizon: {
++      sky0: '#3B2C22',
++      sky1: '#A86228',
++      sky2: '#E89E3D',
++      sky3: '#FCDF96',
++      sunY: 94,
++      sunGlowOpacity: 0.65,
++      sunCore: '#FFF7DA',
++      sunEdge: '#F59F2B',
++      seaFill: '#292227',
++      seaGlow: '#F9C971',
++      seaWave: '#1A120E',
++      ridgeBack: '#4B2A1E',
++      ridgeFront: '#21150F',
++      openBack: '#603522',
++      openFront: '#241610',
++      starsOpacity: 0,
++    },
++    compass: {
++      bg: '#17110C',
++      pillBg: 'rgba(255, 234, 209, 0.08)',
++      pillBorder: 'rgba(255, 234, 209, 0.16)',
++      title: '#FFF7ED',
++      subtitle: '#CEB6A2',
++      hint: '#EAD5C0',
++      alignedBg: 'rgba(245, 178, 56, 0.22)',
++      alignedBorder: '#F5B238',
++      alignedText: '#FFE4A3',
++      closeBg: 'rgba(255, 234, 209, 0.12)',
++      closeBorder: 'rgba(255, 234, 209, 0.20)',
++      closeText: '#FFF6EB',
++      dialCenter: '#2C2016',
++      dialEdge: '#1C130D',
++      dialRing: 'rgba(255, 224, 185, 0.22)',
++      dialInnerRing: 'rgba(255, 224, 185, 0.08)',
++      tickMajor: '#FCECD8',
++      tickNorth: '#F5A623',
++      tickMedium: 'rgba(252, 236, 216, 0.45)',
++      tickMinor: 'rgba(252, 236, 216, 0.18)',
++      cardinal: '#E8D5C1',
++      beam0: '#F5B73B',
++      beam1: '#F5A623',
++      beam2: '#E68329',
++      sunFill: '#F59F2B',
++      sunStroke: '#FFF6DE',
++      sunGlow0: '#FFF7DC',
++      sunGlow1: '#F5B238',
++      sunGlow2: '#E55B24',
++      pivotBg: '#2C2016',
++      pivotStroke: 'rgba(255, 224, 185, 0.4)',
++      pivotDot: '#FFF3E2',
++      pointer: '#FFF4E6',
++      pointerAligned: '#FFBA49',
++    },
++    map: {
++      ground: '#FBF2E2',
++      field: '#F5E5CB',
++      green: '#DCE3B6',
++      water: '#BDDAE0',
++      town: '#F1DAC1',
++      roadFill: '#FFFFFF',
++      roadEdge: '#E7BF97',
++      label: '#754B31',
++      labelHalo: '#FBF2E2',
++      horizonStart: '#FFBD59',
++      horizonStartOpacity: 0.2,
++      horizonMid: '#F7C663',
++      horizonMidOpacity: 0.07,
++      beamStart: '#F5B73B',
++      beamStartOpacity: 0.36,
++      beamEnd: '#EE8B34',
++      beamEndOpacity: 0.12,
++      sunGlowCore: '#FFF8DA',
++      sunGlowMid: '#F5B238',
++      sunGlowEdge: '#E57924',
++      sunFill: '#F5A623',
++      sunStroke: '#FFFFFF',
++      sunCore: '#FFF8DA',
++      scrimColor: '#1A120E',
++      scrimOpacity: 0.12,
++      pinStroke: '#FFFFFF',
++      pinShadow: '#2A1A12',
++      pinShadowOpacity: 0.18,
++      userHalo: '#1C130D',
++      userHaloOpacity: 0.1,
++      userRing: '#FFFFFF',
++      userCore: '#1C130D',
++      rankTopBg: '#1C130D',
++      rankTopStroke: '#FFFFFF',
++      rankTopText: '#FBD687',
++      rankBg: '#FFFFFF',
++      rankStroke: '#DECDBB',
++      rankText: '#21150F',
++    },
++  },
+ 
+-  if (isTomorrow || msToSunset <= 0) {
+-    return {
+-      id: 'twilight',
+-      label: 'מתכוננים למחר',
+-      accent: '#E07A5F',
+-      glow: 'rgba(224, 122, 95, 0.28)',
+-      badgeBg: 'rgba(224, 122, 95, 0.22)',
+-      badgeText: '#FFD3C4',
+-      progress: 0.08,
+-    };
+-  }
++  golden: {
++    id: 'golden',
++    isDark: false,
++    statusBarStyle: 'dark',
++    accent: '#FF7842',
++    glow: 'rgba(255, 114, 59, 0.34)',
++    badgeBg: 'rgba(255, 114, 59, 0.24)',
++    badgeText: '#FFD5BF',
++    hud: {
++      bg: 'rgba(36, 17, 13, 0.93)',
++      border: 'rgba(255, 178, 126, 0.22)',
++      shadow: '#24110D',
++      iconBoxBg: 'rgba(255, 184, 136, 0.10)',
++      iconBoxBorder: 'rgba(255, 184, 136, 0.18)',
++      horizonLine: 'rgba(255, 214, 182, 0.48)',
++      label: '#D8B7A6',
++      time: '#FFF6EE',
++      countdownCaption: 'rgba(255, 224, 198, 0.78)',
++      trackBg: 'rgba(255, 224, 198, 0.15)',
++      meta: '#E9CFC0',
++    },
++    ui: {
++      sheet: '#FFF2E6',
++      sheetTopBorder: 'transparent',
++      surface: '#FFFFFF',
++      sand: '#F5D8C0',
++      sandSoft: '#FCEADF',
++      handle: '#E2BEA2',
++      ink: '#26120B',
++      inkSoft: '#542C1D',
++      muted: '#704230',
++      mutedSoft: '#774A38',
++      line: '#EED6C2',
++      lineStrong: '#E2BEA2',
++      heroBg: '#FFF8F1',
++      heroBorder: '#EDA876',
++      heroShadow: '#B54B1D',
++      topPickBg: '#2E140D',
++      topPickText: '#FFD199',
++      chipBg: '#FFF5EC',
++      chipBorder: '#EFC9AC',
++      chipText: '#542C1D',
++      primaryBtnBg: '#2B140E',
++      primaryBtnText: '#FFF6EE',
++      secondaryBtnBg: '#FFFFFF',
++      secondaryBtnBorder: '#E2BEA2',
++      secondaryBtnText: '#26120B',
++      scorePillBg: '#FCE7D6',
++      scorePillText: '#A63810',
++      ringTrack: '#F5DAC4',
++      ringView: '#E55B24',
++      ringAccess: '#D98E14',
++      ringPleasant: '#527041',
++      tagSoftBg: '#FDE0CE',
++      tagSoftText: '#A63810',
++      kindText: '#A63810',
++      selectedBorder: '#E55B24',
++      scrim: 'rgba(28, 12, 8, 0.50)',
++      heroBadgeBg: 'rgba(34, 16, 12, 0.82)',
++      heroBadgeBorder: 'rgba(255, 190, 146, 0.25)',
++      heroBadgeText: '#FFF5EC',
++      fabBg: '#2B140E',
++      fabBorder: 'rgba(255, 194, 146, 0.26)',
++      fabRing: 'rgba(255, 228, 204, 0.78)',
++      fabNorth: '#FF7842',
++      fabSouth: '#F4D2BA',
++    },
++    horizon: {
++      sky0: '#26141A',
++      sky1: '#943221',
++      sky2: '#EC6E35',
++      sky3: '#FDBE69',
++      sunY: 104,
++      sunGlowOpacity: 0.72,
++      sunCore: '#FFF3CC',
++      sunEdge: '#FF6B2E',
++      seaFill: '#291D26',
++      seaGlow: '#FFB45A',
++      seaWave: '#1B100E',
++      ridgeBack: '#47211A',
++      ridgeFront: '#1F120E',
++      openBack: '#5D2A1C',
++      openFront: '#22130F',
++      starsOpacity: 0,
++    },
++    compass: {
++      bg: '#1A0D0A',
++      pillBg: 'rgba(255, 210, 178, 0.09)',
++      pillBorder: 'rgba(255, 210, 178, 0.18)',
++      title: '#FFF5EC',
++      subtitle: '#D5B09D',
++      hint: '#F2D2BE',
++      alignedBg: 'rgba(255, 120, 66, 0.24)',
++      alignedBorder: '#FF8D4F',
++      alignedText: '#FFE0C4',
++      closeBg: 'rgba(255, 210, 178, 0.12)',
++      closeBorder: 'rgba(255, 210, 178, 0.22)',
++      closeText: '#FFF5EC',
++      dialCenter: '#331914',
++      dialEdge: '#1E0F0C',
++      dialRing: 'rgba(255, 196, 152, 0.24)',
++      dialInnerRing: 'rgba(255, 196, 152, 0.09)',
++      tickMajor: '#FCE8D8',
++      tickNorth: '#FF6B35',
++      tickMedium: 'rgba(252, 232, 216, 0.45)',
++      tickMinor: 'rgba(252, 232, 216, 0.18)',
++      cardinal: '#EDD2BE',
++      beam0: '#FF9844',
++      beam1: '#FF7533',
++      beam2: '#E54B24',
++      sunFill: '#FF6C2C',
++      sunStroke: '#FFF3DE',
++      sunGlow0: '#FFF4D4',
++      sunGlow1: '#FF843B',
++      sunGlow2: '#E54B24',
++      pivotBg: '#331914',
++      pivotStroke: 'rgba(255, 196, 152, 0.42)',
++      pivotDot: '#FFF3E6',
++      pointer: '#FFF3E6',
++      pointerAligned: '#FFAD5C',
++    },
++    map: {
++      ground: '#FCE7D1',
++      field: '#F6D6B7',
++      green: '#CED59F',
++      water: '#C2CED9',
++      town: '#F1C7A8',
++      roadFill: '#FFFFFF',
++      roadEdge: '#DF9F75',
++      label: '#6B3520',
++      labelHalo: '#FCE7D1',
++      horizonStart: '#FF6E38',
++      horizonStartOpacity: 0.28,
++      horizonMid: '#FFA158',
++      horizonMidOpacity: 0.12,
++      beamStart: '#FF8633',
++      beamStartOpacity: 0.46,
++      beamEnd: '#E54B24',
++      beamEndOpacity: 0.18,
++      sunGlowCore: '#FFF4D4',
++      sunGlowMid: '#FF7D38',
++      sunGlowEdge: '#E54B24',
++      sunFill: '#FF6C2C',
++      sunStroke: '#FFFFFF',
++      sunCore: '#FFE8AE',
++      scrimColor: '#24110D',
++      scrimOpacity: 0.14,
++      pinStroke: '#FFFFFF',
++      pinShadow: '#3A170D',
++      pinShadowOpacity: 0.22,
++      userHalo: '#2B140E',
++      userHaloOpacity: 0.11,
++      userRing: '#FFFFFF',
++      userCore: '#2B140E',
++      rankTopBg: '#2B140E',
++      rankTopStroke: '#FFFFFF',
++      rankTopText: '#FFD199',
++      rankBg: '#FFFFFF',
++      rankStroke: '#E2BEA2',
++      rankText: '#26120B',
++    },
++  },
+ 
+-  const progress = Math.max(0.06, Math.min(1, 1 - msToSunset / TWO_HOURS_MS));
++  blue: {
++    id: 'blue',
++    isDark: false,
++    statusBarStyle: 'dark',
++    accent: '#F284B8',
++    glow: 'rgba(242, 132, 184, 0.30)',
++    badgeBg: 'rgba(242, 132, 184, 0.22)',
++    badgeText: '#FFE0F0',
++    hud: {
++      bg: 'rgba(29, 20, 48, 0.93)',
++      border: 'rgba(232, 160, 216, 0.22)',
++      shadow: '#150E26',
++      iconBoxBg: 'rgba(232, 160, 216, 0.10)',
++      iconBoxBorder: 'rgba(232, 160, 216, 0.18)',
++      horizonLine: 'rgba(232, 198, 240, 0.45)',
++      label: '#C5B6E0',
++      time: '#FAF5FF',
++      countdownCaption: 'rgba(244, 224, 250, 0.78)',
++      trackBg: 'rgba(232, 198, 240, 0.16)',
++      meta: '#DBD0F0',
++    },
++    ui: {
++      sheet: '#F4ECF9',
++      sheetTopBorder: 'transparent',
++      surface: '#FFFFFF',
++      sand: '#E8D9F2',
++      sandSoft: '#F6EBF8',
++      handle: '#CBB8DE',
++      ink: '#1E1433',
++      inkSoft: '#443266',
++      muted: '#5F4B82',
++      mutedSoft: '#67538A',
++      line: '#E2D4EE',
++      lineStrong: '#CDB9DF',
++      heroBg: '#FCF8FF',
++      heroBorder: '#DAB8E8',
++      heroShadow: '#4A2B6E',
++      topPickBg: '#24173D',
++      topPickText: '#F9C6E3',
++      chipBg: '#F9F2FC',
++      chipBorder: '#DFCCE9',
++      chipText: '#443266',
++      primaryBtnBg: '#24173D',
++      primaryBtnText: '#FAF5FF',
++      secondaryBtnBg: '#FFFFFF',
++      secondaryBtnBorder: '#CDB9DF',
++      secondaryBtnText: '#1E1433',
++      scorePillBg: '#F6E6F4',
++      scorePillText: '#8C2B68',
++      ringTrack: '#EADDF2',
++      ringView: '#D65A98',
++      ringAccess: '#D69422',
++      ringPleasant: '#4E6F64',
++      tagSoftBg: '#F7E1EF',
++      tagSoftText: '#8C2B68',
++      kindText: '#8C2B68',
++      selectedBorder: '#D65A98',
++      scrim: 'rgba(20, 12, 36, 0.54)',
++      heroBadgeBg: 'rgba(29, 20, 48, 0.84)',
++      heroBadgeBorder: 'rgba(238, 174, 222, 0.26)',
++      heroBadgeText: '#FDF5FF',
++      fabBg: '#24173D',
++      fabBorder: 'rgba(232, 166, 218, 0.28)',
++      fabRing: 'rgba(244, 224, 250, 0.78)',
++      fabNorth: '#F284B8',
++      fabSouth: '#DED0EE',
++    },
++    horizon: {
++      sky0: '#171130',
++      sky1: '#492A6E',
++      sky2: '#B54B87',
++      sky3: '#F199B2',
++      sunY: 114,
++      sunGlowOpacity: 0.45,
++      sunCore: '#FCE4F0',
++      sunEdge: '#EB6FA2',
++      seaFill: '#1B1732',
++      seaGlow: '#EC82AF',
++      seaWave: '#130E24',
++      ridgeBack: '#32204D',
++      ridgeFront: '#17112B',
++      openBack: '#42285C',
++      openFront: '#1A1230',
++      starsOpacity: 0.25,
++    },
++    compass: {
++      bg: '#130E24',
++      pillBg: 'rgba(236, 198, 248, 0.09)',
++      pillBorder: 'rgba(236, 198, 248, 0.18)',
++      title: '#FAF5FF',
++      subtitle: '#C3B2DF',
++      hint: '#E6D8F8',
++      alignedBg: 'rgba(242, 132, 184, 0.22)',
++      alignedBorder: '#F284B8',
++      alignedText: '#FFE0F0',
++      closeBg: 'rgba(236, 198, 248, 0.12)',
++      closeBorder: 'rgba(236, 198, 248, 0.20)',
++      closeText: '#FAF5FF',
++      dialCenter: '#251B42',
++      dialEdge: '#16102A',
++      dialRing: 'rgba(232, 196, 248, 0.24)',
++      dialInnerRing: 'rgba(232, 196, 248, 0.09)',
++      tickMajor: '#F6E8FF',
++      tickNorth: '#F284B8',
++      tickMedium: 'rgba(246, 232, 255, 0.45)',
++      tickMinor: 'rgba(246, 232, 255, 0.18)',
++      cardinal: '#E2D4F5',
++      beam0: '#F284B8',
++      beam1: '#D266B6',
++      beam2: '#8F59CE',
++      sunFill: '#EE72A8',
++      sunStroke: '#FCE8F4',
++      sunGlow0: '#FFE8F4',
++      sunGlow1: '#EE72A8',
++      sunGlow2: '#8F59CE',
++      pivotBg: '#251B42',
++      pivotStroke: 'rgba(232, 196, 248, 0.42)',
++      pivotDot: '#FAF2FF',
++      pointer: '#FAF2FF',
++      pointerAligned: '#FF9FCE',
++    },
++    map: {
++      ground: '#CFC6E6',
++      field: '#C3B7DD',
++      green: '#9AB0B4',
++      water: '#8FA5CA',
++      town: '#DCC4DC',
++      roadFill: '#FFFFFF',
++      roadEdge: '#9B8CC2',
++      label: '#2B1E46',
++      labelHalo: '#D9D1EE',
++      horizonStart: '#EC6FA4',
++      horizonStartOpacity: 0.28,
++      horizonMid: '#9B6AC8',
++      horizonMidOpacity: 0.13,
++      beamStart: '#EA6AA4',
++      beamStartOpacity: 0.34,
++      beamEnd: '#8F63C7',
++      beamEndOpacity: 0.12,
++      sunGlowCore: '#FCE4F2',
++      sunGlowMid: '#EC6FA4',
++      sunGlowEdge: '#8E5CC4',
++      sunFill: '#EC6CA1',
++      sunStroke: '#FFF2F8',
++      sunCore: '#FFE0EF',
++      scrimColor: '#19102E',
++      scrimOpacity: 0.16,
++      pinStroke: '#FFFFFF',
++      pinShadow: '#22153A',
++      pinShadowOpacity: 0.24,
++      userHalo: '#24173D',
++      userHaloOpacity: 0.14,
++      userRing: '#FFFFFF',
++      userCore: '#24173D',
++      rankTopBg: '#24173D',
++      rankTopStroke: '#FFFFFF',
++      rankTopText: '#F9C6E3',
++      rankBg: '#FFFFFF',
++      rankStroke: '#CDB9DF',
++      rankText: '#1E1433',
++    },
++  },
+ 
+-  if (msToSunset <= 20 * 60000) {
++  night: {
++    id: 'night',
++    isDark: true,
++    statusBarStyle: 'light',
++    accent: '#EAB556',
++    glow: 'rgba(234, 181, 86, 0.22)',
++    badgeBg: 'rgba(234, 181, 86, 0.16)',
++    badgeText: '#FBE3AC',
++    hud: {
++      bg: 'rgba(19, 25, 39, 0.94)',
++      border: 'rgba(176, 198, 240, 0.16)',
++      shadow: '#05080F',
++      iconBoxBg: 'rgba(176, 198, 240, 0.08)',
++      iconBoxBorder: 'rgba(176, 198, 240, 0.15)',
++      horizonLine: 'rgba(186, 206, 245, 0.36)',
++      label: '#AAB7D1',
++      time: '#F3F6FC',
++      countdownCaption: 'rgba(218, 228, 248, 0.78)',
++      trackBg: 'rgba(176, 198, 240, 0.14)',
++      meta: '#C4CFE4',
++    },
++    ui: {
++      sheet: '#141926',
++      sheetTopBorder: 'rgba(176, 198, 240, 0.12)',
++      surface: '#192030',
++      sand: '#232C40',
++      sandSoft: '#1E2638',
++      handle: '#3B4763',
++      ink: '#F1F5FC',
++      inkSoft: '#CED8EB',
++      muted: '#A2B0CA',
++      mutedSoft: '#92A1BD',
++      line: '#273147',
++      lineStrong: '#384664',
++      heroBg: '#1B2335',
++      heroBorder: '#635234',
++      heroShadow: '#04070D',
++      topPickBg: '#27324A',
++      topPickText: '#FBD98B',
++      chipBg: '#222B40',
++      chipBorder: '#34415E',
++      chipText: '#D4DEF0',
++      primaryBtnBg: '#F0EBE1',
++      primaryBtnText: '#141926',
++      secondaryBtnBg: '#20293D',
++      secondaryBtnBorder: '#384664',
++      secondaryBtnText: '#EBF0FA',
++      scorePillBg: '#242E44',
++      scorePillText: '#F6BE65',
++      ringTrack: '#2B364E',
++      ringView: '#F26F3B',
++      ringAccess: '#F5B742',
++      ringPleasant: '#7FA668',
++      tagSoftBg: '#2E261C',
++      tagSoftText: '#F5BF6C',
++      kindText: '#F2B866',
++      selectedBorder: '#EAB556',
++      scrim: 'rgba(4, 7, 14, 0.72)',
++      heroBadgeBg: 'rgba(17, 22, 34, 0.86)',
++      heroBadgeBorder: 'rgba(176, 198, 240, 0.22)',
++      heroBadgeText: '#F1F5FC',
++      fabBg: '#1E273B',
++      fabBorder: 'rgba(186, 206, 245, 0.26)',
++      fabRing: 'rgba(220, 232, 250, 0.75)',
++      fabNorth: '#EAB556',
++      fabSouth: '#9BAAC7',
++    },
++    horizon: {
++      sky0: '#090D18',
++      sky1: '#141D34',
++      sky2: '#253254',
++      sky3: '#3D496B',
++      sunY: 82,
++      sunGlowOpacity: 0.28,
++      sunCore: '#EEF2FA',
++      sunEdge: '#B9C8E6',
++      seaFill: '#0C1220',
++      seaGlow: '#C7D4EC',
++      seaWave: '#070A12',
++      ridgeBack: '#141C2E',
++      ridgeFront: '#0B101C',
++      openBack: '#172034',
++      openFront: '#0B101C',
++      starsOpacity: 0.8,
++    },
++    compass: {
++      bg: '#0B0F18',
++      pillBg: 'rgba(186, 206, 245, 0.08)',
++      pillBorder: 'rgba(186, 206, 245, 0.16)',
++      title: '#F2F6FC',
++      subtitle: '#A8B6D0',
++      hint: '#D8E2F5',
++      alignedBg: 'rgba(234, 181, 86, 0.20)',
++      alignedBorder: '#EAB556',
++      alignedText: '#FBE3AC',
++      closeBg: 'rgba(186, 206, 245, 0.11)',
++      closeBorder: 'rgba(186, 206, 245, 0.18)',
++      closeText: '#F2F6FC',
++      dialCenter: '#172033',
++      dialEdge: '#0E1422',
++      dialRing: 'rgba(186, 206, 245, 0.22)',
++      dialInnerRing: 'rgba(186, 206, 245, 0.09)',
++      tickMajor: '#E2EAF8',
++      tickNorth: '#FF7C47',
++      tickMedium: 'rgba(226, 234, 248, 0.45)',
++      tickMinor: 'rgba(226, 234, 248, 0.18)',
++      cardinal: '#C9D6EE',
++      beam0: '#EAB556',
++      beam1: '#C98A3A',
++      beam2: '#8F5A38',
++      sunFill: '#E0A144',
++      sunStroke: '#F2F6FC',
++      sunGlow0: '#FFF4DC',
++      sunGlow1: '#EAB556',
++      sunGlow2: '#8F5A38',
++      pivotBg: '#172033',
++      pivotStroke: 'rgba(186, 206, 245, 0.36)',
++      pivotDot: '#EEF3FC',
++      pointer: '#EEF3FC',
++      pointerAligned: '#F6C86E',
++    },
++    map: {
++      ground: '#111622',
++      field: '#161D2C',
++      green: '#162524',
++      water: '#0C1A2B',
++      town: '#1D2436',
++      roadFill: '#8592AA',
++      roadEdge: '#0A0E16',
++      label: '#C5CFE3',
++      labelHalo: '#111622',
++      horizonStart: '#5E5088',
++      horizonStartOpacity: 0.18,
++      horizonMid: '#303C61',
++      horizonMidOpacity: 0.08,
++      beamStart: '#D49642',
++      beamStartOpacity: 0.22,
++      beamEnd: '#8F5A38',
++      beamEndOpacity: 0.06,
++      sunGlowCore: '#FCE4B0',
++      sunGlowMid: '#C98C3B',
++      sunGlowEdge: '#6E4C32',
++      sunFill: '#1C2336',
++      sunStroke: '#EAB556',
++      sunCore: '#EAB556',
++      scrimColor: '#060910',
++      scrimOpacity: 0.32,
++      pinStroke: '#D8E1F0',
++      pinShadow: '#04070D',
++      pinShadowOpacity: 0.45,
++      userHalo: '#9BB8ED',
++      userHaloOpacity: 0.2,
++      userRing: '#E8EFFB',
++      userCore: '#EAB556',
++      rankTopBg: '#0E1422',
++      rankTopStroke: '#EAB556',
++      rankTopText: '#FBD98B',
++      rankBg: '#1E273B',
++      rankStroke: '#48587A',
++      rankText: '#EEF3FC',
++    },
++  },
++};
++
++const DAY_WINDOW_MS = 3 * 60 * 60 * 1000;
++const IMMINENT_MS = 20 * 60 * 1000;
++const BLUE_HOUR_MS = 40 * 60 * 1000;
++
++/**
++ * Returns the full time-of-day theme and HUD state for `now`.
++ * When `bounds` (today's sunrise and most recent sunset) is supplied, distinguishes the
++ * 0–40 min post-sunset blue hour and night (including pre-dawn hours before sunrise).
++ */
++export function getSkyPhase(
++  now: Date,
++  goldenHour: Date,
++  sunset: Date,
++  isTomorrow: boolean,
++  bounds?: DaySunBounds,
++): SkyPhase {
++  const t = now.getTime();
++
++  if (bounds?.lastSunset) {
++    const msSinceSunset = t - bounds.lastSunset.getTime();
++    if (msSinceSunset >= 0 && msSinceSunset <= BLUE_HOUR_MS) {
++      return {
++        ...PHASE_THEMES.blue,
++        label: 'השעה הכחולה',
++        progress: Math.max(0.08, Math.min(1, 1 - msSinceSunset / BLUE_HOUR_MS)),
++      };
++    }
++  }
++
++  const msToSunset = sunset.getTime() - t;
++  const isBeforeSunrise = bounds?.sunrise != null && t < bounds.sunrise.getTime();
++  if (isTomorrow || msToSunset <= 0 || isBeforeSunrise) {
+     return {
+-      id: 'imminent',
+-      label: 'השמש ממש יורדת',
+-      accent: '#FF6B35',
+-      glow: 'rgba(255, 107, 53, 0.34)',
+-      badgeBg: 'rgba(255, 107, 53, 0.24)',
+-      badgeText: '#FFC8B0',
+-      progress,
++      ...PHASE_THEMES.night,
++      label: 'מתכוננים למחר',
++      progress: 0.06,
+     };
+   }
+ 
+-  if (msToGolden <= 0) {
++  const progress = Math.max(0.08, Math.min(1, 1 - msToSunset / DAY_WINDOW_MS));
++  const msToGolden = goldenHour.getTime() - t;
++
++  if (msToGolden <= 0 || msToSunset <= IMMINENT_MS) {
+     return {
+-      id: 'golden',
+-      label: 'שעת הזהב עכשיו',
+-      accent: '#F5A623',
+-      glow: 'rgba(245, 166, 35, 0.32)',
+-      badgeBg: 'rgba(245, 166, 35, 0.22)',
+-      badgeText: '#FFE1A3',
++      ...PHASE_THEMES.golden,
++      label: msToSunset <= IMMINENT_MS ? 'השמש ממש יורדת' : 'שעת הזהב עכשיו',
+       progress,
+     };
+   }
+ 
+   return {
+-    id: 'afternoon',
++    ...PHASE_THEMES.afternoon,
+     label: 'יש זמן בנחת',
+-    accent: '#F2B23E',
+-    glow: 'rgba(242, 178, 62, 0.25)',
+-    badgeBg: 'rgba(242, 178, 62, 0.18)',
+-    badgeText: '#FDE4AF',
+     progress,
+   };
+ }
++
++const FALLBACK_COORDS = { lat: 32.08, lon: 34.78 };
++
++/** Approximate phase using Israel fallback coordinates before GPS resolves (keeps launch/loading chrome matched to the time of day). */
++export function getFallbackSkyPhase(now: Date = new Date()): SkyPhase {
++  const info = getSunsetInfo(FALLBACK_COORDS.lat, FALLBACK_COORDS.lon, now);
++  if (!info) return { ...PHASE_THEMES.afternoon, label: 'יש זמן בנחת', progress: 0.2 };
++  const bounds = getDaySunBounds(FALLBACK_COORDS.lat, FALLBACK_COORDS.lon, now);
++  return getSkyPhase(now, info.goldenHour, info.sunset, info.isTomorrow, bounds);
++}
+diff --git a/apps/sunset-spots/tests/sun.test.ts b/apps/sunset-spots/tests/sun.test.ts
+index cbd32f9..258fa85 100644
+--- a/apps/sunset-spots/tests/sun.test.ts
++++ b/apps/sunset-spots/tests/sun.test.ts
+@@ -5,6 +5,7 @@ import {
+   angleBetween,
+   bearingToHebrew,
+   formatCountdown,
++  getDaySunBounds,
+   getSunsetInfo,
+   normalizeBearing,
+ } from '../src/lib/sun.ts';
+@@ -40,6 +41,40 @@ test('after sunset, the next sunset is tomorrow', () => {
+   assert.ok(info.sunset.getTime() > new Date('2026-10-19T00:00:00Z').getTime());
+ });
+ 
++test('getDaySunBounds keeps today sunset after sunset so blue hour can be detected', () => {
++  // Sunset on 2026-11-21 around 31.905, 34.84 is ~14:38 UTC (16:38 Israel winter time).
++  const homeLat = 31.905;
++  const homeLon = 34.84;
++
++  // 17 minutes after sunset (~16:55 local): getSunsetInfo rolls to tomorrow, while lastSunset is today's.
++  const blueNow = new Date('2026-11-21T14:55:00Z');
++  const nextInfo = getSunsetInfo(homeLat, homeLon, blueNow);
++  assert.ok(nextInfo?.isTomorrow);
++  const blueBounds = getDaySunBounds(homeLat, homeLon, blueNow);
++  assert.ok(blueBounds.lastSunset);
++  const minSinceSunset = (blueNow.getTime() - blueBounds.lastSunset.getTime()) / 60000;
++  assert.ok(minSinceSunset > 0 && minSinceSunset < 40, `expected blue hour window, got ${minSinceSunset}m`);
++  assert.ok(blueBounds.sunrise && blueBounds.sunrise.getTime() < blueNow.getTime());
++
++  // Afternoon (14:30 local): lastSunset is yesterday, sunrise is earlier today.
++  const afternoonNow = new Date('2026-11-21T12:30:00Z');
++  const afternoonBounds = getDaySunBounds(homeLat, homeLon, afternoonNow);
++  assert.ok(afternoonBounds.lastSunset && afternoonBounds.lastSunset.getTime() < afternoonNow.getTime());
++  assert.ok((afternoonNow.getTime() - afternoonBounds.lastSunset.getTime()) / 3600000 > 20);
++  assert.ok(afternoonBounds.sunrise && afternoonBounds.sunrise.getTime() < afternoonNow.getTime());
++
++  // Pre-dawn night (02:30 local): sunrise is still ahead today.
++  const predawnNow = new Date('2026-11-21T00:30:00Z');
++  const predawnBounds = getDaySunBounds(homeLat, homeLon, predawnNow);
++  assert.ok(predawnBounds.sunrise && predawnNow.getTime() < predawnBounds.sunrise.getTime());
++
++  // Polar day returns nulls cleanly.
++  assert.deepEqual(getDaySunBounds(78.2, 15.6, new Date('2026-06-21T09:00:00Z')), {
++    lastSunset: null,
++    sunrise: null,
++  });
++});
++
+ test('sunset is null during polar day', () => {
+   assert.equal(getSunsetInfo(78.2, 15.6, new Date('2026-06-21T09:00:00Z')), null); // Svalbard
+ });
+diff --git a/apps/sunset-spots/tests/theme.test.ts b/apps/sunset-spots/tests/theme.test.ts
+new file mode 100644
+index 0000000..aee92d1
+--- /dev/null
++++ b/apps/sunset-spots/tests/theme.test.ts
+@@ -0,0 +1,95 @@
++/// <reference types="node" />
++import { test } from 'node:test';
++import assert from 'node:assert/strict';
++import { getDaySunBounds, getSunsetInfo } from '../src/lib/sun.ts';
++import { getSkyPhase, PHASE_THEMES, type SkyPhaseId } from '../src/theme.ts';
++
++const LAT = 31.905;
++const LON = 34.84;
++
++function phaseAt(isoUtc: string) {
++  const now = new Date(isoUtc);
++  const info = getSunsetInfo(LAT, LON, now)!;
++  const bounds = getDaySunBounds(LAT, LON, now);
++  return getSkyPhase(now, info.goldenHour, info.sunset, info.isTomorrow, bounds);
++}
++
++test('getSkyPhase transitions through afternoon, golden, blue hour, and night', () => {
++  // 2026-11-21 around 31.905, 34.84: sunset ~14:38 UTC (16:38 Israel time).
++  const afternoon = phaseAt('2026-11-21T12:30:00Z'); // 14:30 local
++  assert.equal(afternoon.id, 'afternoon');
++  assert.equal(afternoon.isDark, false);
++  assert.equal(afternoon.statusBarStyle, 'dark');
++
++  const golden = phaseAt('2026-11-21T14:25:00Z'); // 16:25 local (~13m before sunset)
++  assert.equal(golden.id, 'golden');
++  assert.equal(golden.isDark, false);
++
++  const blue = phaseAt('2026-11-21T14:55:00Z'); // 16:55 local (~17m after sunset)
++  assert.equal(blue.id, 'blue');
++  assert.equal(blue.isDark, false);
++
++  const night = phaseAt('2026-11-21T17:30:00Z'); // 19:30 local
++  assert.equal(night.id, 'night');
++  assert.equal(night.isDark, true);
++  assert.equal(night.statusBarStyle, 'light');
++
++  const predawn = phaseAt('2026-11-21T00:30:00Z'); // 02:30 local (before sunrise)
++  assert.equal(predawn.id, 'night');
++  assert.equal(predawn.isDark, true);
++});
++
++function luminance(hex: string): number {
++  const m = /^#([0-9a-f]{6})$/i.exec(hex);
++  assert.ok(m, `expected #RRGGBB hex, got ${hex}`);
++  const channels = [0, 1, 2].map((i) => {
++    const v = parseInt(m[1].slice(2 * i, 2 * i + 2), 16) / 255;
++    return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
++  });
++  return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2];
++}
++
++function contrastRatio(a: string, b: string): number {
++  const l1 = luminance(a);
++  const l2 = luminance(b);
++  return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
++}
++
++function rgbaToHexOver(rgba: string, bgHex: string): string {
++  const hexMatch = /^#([0-9a-f]{6})$/i.exec(rgba);
++  if (hexMatch) return rgba;
++  const m = /^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(?:,\s*([\d.]+)\s*)?\)$/i.exec(rgba);
++  assert.ok(m, `unexpected color format: ${rgba}`);
++  const a = m[4] === undefined ? 1 : Number(m[4]);
++  const bg = [0, 1, 2].map((i) => parseInt(bgHex.slice(1 + 2 * i, 3 + 2 * i), 16));
++  const out = [0, 1, 2].map((i) => Math.round(Number(m[1 + i]) * a + bg[i] * (1 - a)));
++  return `#${out.map((n) => n.toString(16).padStart(2, '0')).join('')}`;
++}
++
++test('all 4 phases keep >= 4.5:1 text contrast on HUD, sheets, cards, buttons, and map labels', () => {
++  for (const id of Object.keys(PHASE_THEMES) as SkyPhaseId[]) {
++    const t = PHASE_THEMES[id];
++    const hudBg = rgbaToHexOver(t.hud.bg, t.map.ground);
++    const badgeBg = rgbaToHexOver(t.badgeBg, hudBg);
++    assert.ok(contrastRatio(t.hud.time, hudBg) >= 4.5, `${id}: hud time`);
++    assert.ok(contrastRatio(t.hud.label, hudBg) >= 4.5, `${id}: hud label`);
++    assert.ok(contrastRatio(t.hud.meta, hudBg) >= 4.5, `${id}: hud meta`);
++    assert.ok(contrastRatio(t.accent, hudBg) >= 4.5, `${id}: hud accent`);
++    assert.ok(contrastRatio(t.badgeText, badgeBg) >= 4.5, `${id}: hud badge`);
++    assert.ok(contrastRatio(t.ui.ink, t.ui.sheet) >= 4.5, `${id}: ink on sheet`);
++    assert.ok(contrastRatio(t.ui.inkSoft, t.ui.surface) >= 4.5, `${id}: inkSoft on surface`);
++    assert.ok(contrastRatio(t.ui.muted, t.ui.heroBg) >= 4.5, `${id}: muted on heroBg`);
++    assert.ok(contrastRatio(t.ui.mutedSoft, t.ui.sheet) >= 4.5, `${id}: mutedSoft on sheet`);
++    assert.ok(contrastRatio(t.ui.topPickText, t.ui.topPickBg) >= 4.5, `${id}: topPick`);
++    assert.ok(contrastRatio(t.ui.primaryBtnText, t.ui.primaryBtnBg) >= 4.5, `${id}: primaryBtn`);
++    assert.ok(contrastRatio(t.ui.secondaryBtnText, t.ui.secondaryBtnBg) >= 4.5, `${id}: secondaryBtn`);
++    assert.ok(contrastRatio(t.ui.scorePillText, t.ui.scorePillBg) >= 4.5, `${id}: scorePill`);
++    assert.ok(contrastRatio(t.ui.kindText, t.ui.sheet) >= 4.5, `${id}: kindText on sheet`);
++    assert.ok(contrastRatio(t.map.label, t.map.ground) >= 4.5, `${id}: map label on ground`);
++    assert.ok(contrastRatio(t.map.label, t.map.town) >= 4.5, `${id}: map label on town`);
++    assert.ok(contrastRatio(t.map.rankTopText, t.map.rankTopBg) >= 4.5, `${id}: rankTop`);
++    assert.ok(contrastRatio(t.map.rankText, t.map.rankBg) >= 4.5, `${id}: rank`);
++    assert.ok(contrastRatio(t.compass.title, t.compass.bg) >= 4.5, `${id}: compass title`);
++    assert.ok(contrastRatio(t.compass.subtitle, t.compass.bg) >= 4.5, `${id}: compass subtitle`);
++  }
++});
