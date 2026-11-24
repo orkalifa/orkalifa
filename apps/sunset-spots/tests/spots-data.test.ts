@@ -3,6 +3,17 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { distanceMeters } from '../src/lib/geo.ts';
 import { mergeNearby, type Candidate } from '../src/lib/osm.ts';
+import { readFileSync } from 'node:fs';
+import { validateSpots, MIN_SPOTS } from '../scripts/spots-build.ts';
+
+test('bundled spots-il.json has enough spots and a valid shape', () => {
+  const real: unknown = JSON.parse(readFileSync(new URL('../src/data/spots-il.json', import.meta.url), 'utf8'));
+  assert.ok(Array.isArray(real), 'is an array');
+  assert.ok(real.length >= MIN_SPOTS, `has ${real.length} spots`);
+  const result = validateSpots(real);
+  assert.deepEqual(result.errors, []);
+  assert.ok(result.ok);
+});
 
 // Tel Aviv center – should be inside Israel bounds
 const TEL_AVIV = { lat: 32.08, lon: 34.78 };
