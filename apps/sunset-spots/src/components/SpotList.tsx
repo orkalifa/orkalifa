@@ -34,7 +34,7 @@ export function SpotList({
   now?: Date;
   goldenHour?: Date;
 }) {
-  // The entrance replays only when which spots are shown (or their order) changes, not on each tick.
+  // The entrance replays only when which spots are shown changes; a re-rank or a tick doesn't replay it.
   const entranceKey = useMemo(() => motionKey(spots.map((s) => s.id)), [spots]);
 
   if (spots.length === 0) {

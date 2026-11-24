@@ -141,9 +141,10 @@ export function staggerDelay(index: number): number {
 }
 
 /**
- * What a staggered list's entrance is keyed on: which items are shown and in what order.
- * Re-scoring or the clock ticking keeps the key, so the entrance doesn't replay.
+ * What a staggered list's entrance is keyed on: which items are shown, not their order.
+ * Re-scoring, a re-rank that only reorders the same items, or the clock ticking keeps the key,
+ * so the entrance doesn't replay; a new or removed item changes it.
  */
 export function motionKey(ids: readonly string[]): string {
-  return ids.join('|');
+  return [...ids].sort().join('|');
 }

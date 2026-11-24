@@ -20,9 +20,11 @@ test('staggerDelay steps 50ms and caps', () => {
   assert.equal(staggerDelay(-1), 0);
 });
 
-test('motionKey ignores re-scoring, changes with ids/order', () => {
+test('motionKey: reorder -> same key; new/removed id -> new key', () => {
   const a = motionKey(['w1', 'n2', 'w3']);
   assert.equal(a, motionKey(['w1', 'n2', 'w3']));
-  assert.notEqual(a, motionKey(['n2', 'w1', 'w3']));
+  assert.equal(a, motionKey(['n2', 'w3', 'w1']));
   assert.notEqual(a, motionKey(['w1', 'n2', 'w4']));
+  assert.notEqual(a, motionKey(['w1', 'n2']));
+  assert.notEqual(a, motionKey(['w1', 'n2', 'w3', 'w5']));
 });
