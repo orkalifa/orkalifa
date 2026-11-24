@@ -6,10 +6,10 @@
 //   - 404.html, so GitHub Pages serves the app for any path
 // Run after the export (working directory: apps/sunset-spots): npm run build:web
 
-import { createHash } from 'node:crypto';
 import { copyFile, readdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import Jimp from 'jimp-compact';
+import { contentVersion } from './sw-version.mjs';
 
 const DIST = path.resolve('dist');
 const app = JSON.parse(await readFile('app.json', 'utf8')).expo;
@@ -49,28 +49,7 @@ await writeFile(path.join(DIST, 'manifest.webmanifest'), JSON.stringify(manifest
 // 3. Link-preview image: the app's main screen.
 await copyFile('docs/sunlit-main-web.png', path.join(DIST, 'og.png'));
 
-// 4. Service worker: precache every built file; the cache name changes with the build.
-async function walk(dir) {
-  const out = [];
-  for (const entry of await readdir(dir, { withFileTypes: true })) {
-    const full = path.join(dir, entry.name);
-    if (entry.isDirectory()) out.push(...(await walk(full)));
-    else out.push(path.relative(DIST, full).split(path.sep).join('/'));
-  }
-  return out;
-}
-// The font package ships every Rubik weight; the app uses 400–700 upright (see src/app/_layout.tsx).
-const unused = (f) => ['og.png', 'metadata.json'].includes(f) || f.endsWith('.map') || /Rubik_(300|800|900)|Italic/.test(f);
-const files = (await walk(DIST)).filter((f) => !unused(f));
-const precache = [BASE, ...files.filter((f) => f !== 'index.html').map((f) => BASE + f)];
-const version = createHash('sha256').update(precache.join('\n')).digest('hex').slice(0, 12);
-const sw = (await readFile('scripts/sw-template.js', 'utf8'))
-  .replace('__VERSION__', version)
-  .replace('__BASE__', BASE)
-  .replace("'__PRECACHE__'", JSON.stringify(precache));
-await writeFile(path.join(DIST, 'sw.js'), sw);
-
-// 5. Head tags + service worker registration.
+// 4. Head tags + service worker registration.
 const head = `
 <meta name="description" content="${DESCRIPTION}">
 <link rel="manifest" href="${BASE}manifest.webmanifest">
@@ -87,7 +66,12 @@ const head = `
 <meta property="og:locale" content="he_IL">
 <script>
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', function () { navigator.serviceWorker.register('${BASE}sw.js', { scope: '${BASE}' }); });
+  window.addEventListener('load', function () {
+    navigator.serviceWorker.register('${BASE}sw.js', { scope: '${BASE}', updateViaCache: 'none' }).then(function (reg) {
+      // An installed app is often resumed rather than reopened: look for a new version when it comes back.
+      document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') reg.update().catch(function () {}); });
+    });
+  });
 }
 </script>
 `;
@@ -96,5 +80,30 @@ if (!html.includes('rel="manifest"')) html = html.replace('</head>', `${head}</h
 await writeFile(path.join(DIST, 'index.html'), html);
 await writeFile(path.join(DIST, '404.html'), html);
 await writeFile(path.join(DIST, '.nojekyll'), '');
+
+// 5. Service worker: precache every built file. Written last, so the version covers the final index.html;
+// it is a hash of the files' CONTENTS, so an icon or manifest changed under the same name still updates installed apps.
+async function walk(dir) {
+  const out = [];
+  for (const entry of await readdir(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) out.push(...(await walk(full)));
+    else out.push(path.relative(DIST, full).split(path.sep).join('/'));
+  }
+  return out;
+}
+// The font package ships every Rubik weight; the app uses 400–700 upright (see src/app/_layout.tsx).
+const NOT_PRECACHED = ['og.png', 'metadata.json', '404.html', '.nojekyll', 'sw.js'];
+const unused = (f) => NOT_PRECACHED.includes(f) || f.endsWith('.map') || /Rubik_(300|800|900)|Italic/.test(f);
+const files = (await walk(DIST)).filter((f) => !unused(f)).sort();
+const precache = [BASE, ...files.filter((f) => f !== 'index.html').map((f) => BASE + f)];
+const version = contentVersion(
+  await Promise.all(files.map(async (f) => ({ path: f, bytes: await readFile(path.join(DIST, f)) }))),
+);
+const sw = (await readFile('scripts/sw-template.js', 'utf8'))
+  .replace('__VERSION__', version)
+  .replace('__BASE__', BASE)
+  .replace("'__PRECACHE__'", JSON.stringify(precache));
+await writeFile(path.join(DIST, 'sw.js'), sw);
 
 console.log(`web-postbuild: ${precache.length} files precached, version ${version}`);
