@@ -52,3 +52,59 @@ test('service worker sends each request to the right cache rule', () => {
   assert.equal(route('https://orkalifa.github.io/other/x.js'), null);
   assert.equal(route('https://overpass-api.de/api/interpreter'), null);
 });
+
+// A fake fetch event that records the order of calls and whether the background promise settles.
+function fakeEvent() {
+  const calls: string[] = [];
+  let background: Promise<unknown> | undefined;
+  let response: Promise<unknown> | undefined;
+  return {
+    calls,
+    settled: () => background,
+    response: () => response,
+    event: {
+      waitUntil(p: Promise<unknown>) {
+        calls.push('waitUntil');
+        background = p;
+      },
+      respondWith(p: Promise<unknown>) {
+        calls.push('respondWith');
+        response = p;
+      },
+    },
+  };
+}
+
+test('background work is registered with waitUntil synchronously, and always ends', async () => {
+  const source = readFileSync(new URL('../scripts/sw-template.js', import.meta.url), 'utf8');
+  const sandbox: Record<string, unknown> = { self: { addEventListener() {} } };
+  vm.runInNewContext(source, sandbox);
+  type Done = (p?: Promise<unknown>) => void;
+  const respondWithBackground = sandbox.respondWithBackground as (
+    event: unknown,
+    respond: (done: Done) => Promise<unknown>,
+  ) => void;
+
+  // A failed request that never calls done(): the worker still gets released.
+  const failed = fakeEvent();
+  respondWithBackground(failed.event, () => Promise.reject(new Error('offline')));
+  assert.deepEqual(failed.calls, ['waitUntil', 'respondWith']);
+  await assert.rejects(failed.response() as Promise<unknown>);
+  await failed.settled();
+
+  // A refresh handed to done(): the background waits for it, not just for the answer.
+  const ok = fakeEvent();
+  let refreshed = false;
+  let finishRefresh = () => {};
+  const refresh = new Promise<void>((r) => (finishRefresh = r)).then(() => {
+    refreshed = true;
+  });
+  respondWithBackground(ok.event, async (done) => {
+    done(refresh);
+    return 'cached answer';
+  });
+  assert.equal(await ok.response(), 'cached answer');
+  finishRefresh();
+  await ok.settled();
+  assert.equal(refreshed, true);
+});

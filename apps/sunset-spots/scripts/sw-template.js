@@ -70,9 +70,14 @@ async function trimCache(name, max) {
   for (let i = 0; i < keys.length - max; i++) await cache.delete(keys[i]);
 }
 
+/**
+ * Background work (refreshing and trimming a cache) is reported through `done`, which settles a promise the
+ * fetch handler handed to event.waitUntil synchronously: some browsers (Safari) reject a later waitUntil call.
+ * The handler also calls done() when the response settles, so the worker is never kept alive forever.
+ */
+
 /** Answer from the cache straight away, and refresh it in the background. */
-async function staleWhileRevalidate(event, cacheName, max) {
-  const { request } = event;
+async function staleWhileRevalidate(request, cacheName, max, done) {
   const cache = await caches.open(cacheName);
   const cached = await cache.match(request);
   const fresh = fetch(request).then(async (response) => {
@@ -82,20 +87,18 @@ async function staleWhileRevalidate(event, cacheName, max) {
     }
     return response;
   });
-  // Keep the worker alive until the refresh and the trim are done, even after we have answered.
-  event.waitUntil(fresh.catch(() => undefined));
+  done(fresh.catch(() => undefined));
   return cached || fresh.catch(() => Response.error());
 }
 
 /** The network when it answers, otherwise the last answer we kept. */
-async function networkFirst(event, cacheName, max) {
-  const { request } = event;
+async function networkFirst(request, cacheName, max, done) {
   const cache = await caches.open(cacheName);
   try {
     const response = await fetch(request);
     if (response.ok) {
       const copy = response.clone();
-      event.waitUntil(
+      done(
         cache
           .put(request, copy)
           .then(() => (max ? trimCache(cacheName, max) : undefined))
@@ -108,6 +111,15 @@ async function networkFirst(event, cacheName, max) {
     if (cached) return cached;
     throw error;
   }
+}
+
+/** Answer with `respond(done)`, keeping the worker alive (via a waitUntil made right now) until `done` is called. */
+function respondWithBackground(event, respond) {
+  let done = () => {};
+  const background = new Promise((resolve) => (done = resolve));
+  event.waitUntil(background);
+  // Every path ends here too (cache hit without refresh, network error, a non-ok answer); a second call is a no-op.
+  event.respondWith(respond(done).finally(() => done()));
 }
 
 self.addEventListener('fetch', (event) => {
@@ -128,13 +140,13 @@ self.addEventListener('fetch', (event) => {
       event.respondWith(caches.match(request).then((cached) => cached || fetch(request)));
       return;
     case 'tilejson':
-      event.respondWith(networkFirst(event, META_CACHE));
+      respondWithBackground(event, (done) => networkFirst(request, META_CACHE, 0, done));
       return;
     case 'tile':
-      event.respondWith(staleWhileRevalidate(event, TILE_CACHE, MAX_TILES));
+      respondWithBackground(event, (done) => staleWhileRevalidate(request, TILE_CACHE, MAX_TILES, done));
       return;
     case 'data':
-      event.respondWith(networkFirst(event, DATA_CACHE, MAX_DATA));
+      respondWithBackground(event, (done) => networkFirst(request, DATA_CACHE, MAX_DATA, done));
       return;
     default:
   }
