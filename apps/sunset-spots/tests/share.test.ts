@@ -53,6 +53,27 @@ test('a strange id gives no spot', () => {
   assert.equal(parseSharedSpot({ spot: 'relation/42', ll: '32,35' })?.id, 'relation/42');
 });
 
+test('only the id shapes the app makes are accepted', () => {
+  for (const id of ['bogus/abc', 'node/notanumber', 'way/12a', 'mine/ABC', 'node/1234567890123456', 'mine/' + 'a'.repeat(25)]) {
+    assert.equal(parseSharedSpot({ spot: id, ll: '32,35' }), null, `id=${JSON.stringify(id)}`);
+  }
+  for (const id of ['node/246825278', 'way/1', 'relation/42', 'mine/lx3k9a0b']) {
+    assert.equal(parseSharedSpot({ spot: id, ll: '32,35' })?.id, id);
+  }
+});
+
+test('huge parameters are bounded before any work', () => {
+  const huge = 'א'.repeat(1_000_000);
+  const started = performance.now();
+  const name = cleanName(huge)!;
+  const spot = parseSharedSpot({ spot: 'node/1', ll: '32,35', n: huge });
+  assert.equal(parseSharedSpot({ spot: 'node/' + '1'.repeat(1_000_000), ll: '32,35' }), null);
+  assert.equal(parseSharedSpot({ spot: 'node/1', ll: '3'.repeat(1_000_000) }), null);
+  assert.ok(performance.now() - started < 200, 'returns quickly');
+  assert.ok(Array.from(name).length <= 60);
+  assert.ok(Array.from(spot!.name!).length <= 60);
+});
+
 test('names lose control and bidi characters and are capped', () => {
   assert.equal(cleanName('א\u202Eב\nג\u0007'), 'א ב ג');
   assert.equal(cleanName('a\u2066b\u2069c\u202Ad\u0085e\u007F'), 'a b c d e');

@@ -15,8 +15,15 @@ const KINDS = Object.keys(KIND_LABEL) as SpotKind[];
 
 /** Exactly two plain decimal numbers, "lat,lon". No exponents, hex, spaces, or a third value. */
 const LL = /^(-?\d{1,3}(?:\.\d{1,10})?),(-?\d{1,3}(?:\.\d{1,10})?)$/;
-/** Every id the app makes: node/…, way/…, relation/… (OpenStreetMap) and mine/<base36>. */
-const ID = /^[a-z]{1,10}\/[0-9a-z]{1,24}$/;
+/** Every id the app makes: node/…, way/…, relation/… (OpenStreetMap numbers) and mine/<base36>. */
+const ID = /^(?:(?:node|way|relation)\/\d{1,15}|mine\/[0-9a-z]{1,24})$/;
+/**
+ * Upper bounds checked before any regex or string work, so a huge untrusted parameter costs nothing.
+ * Every valid value is far shorter (ids ≤ 29, ll ≤ 31 characters).
+ */
+const ID_RAW_MAX = 40;
+const LL_RAW_MAX = 40;
+const NAME_RAW_MAX = 512;
 /** Control characters, and bidi overrides/embeddings/isolates that could flip the text around them. */
 const UNSAFE = /[\u0000-\u001F\u007F-\u009F\u202A-\u202E\u2066-\u2069]/g;
 const NAME_MAX = 60;
@@ -28,7 +35,8 @@ const NAME_MAX = 60;
  */
 export function cleanName(raw?: string): string | undefined {
   if (!raw) return undefined;
-  const s = raw.replace(UNSAFE, ' ').replace(/\s+/g, ' ').trim();
+  // Bound the raw input first: everything below then works on at most 512 code units.
+  const s = raw.slice(0, NAME_RAW_MAX).replace(UNSAFE, ' ').replace(/\s+/g, ' ').trim();
   return Array.from(s).slice(0, NAME_MAX).join('').trim() || undefined;
 }
 
@@ -53,7 +61,7 @@ const first = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v
 export function parseSharedSpot(params: Params): SharedSpot | null {
   const id = first(params.spot);
   const ll = first(params.ll);
-  if (!id || !ll || !ID.test(id)) return null;
+  if (!id || !ll || id.length > ID_RAW_MAX || ll.length > LL_RAW_MAX || !ID.test(id)) return null;
   const m = LL.exec(ll);
   if (!m) return null;
   const lat = Number(m[1]);
