@@ -10,6 +10,7 @@ import { SpotDetailSheet } from '../components/SpotDetailSheet';
 import { SpotList } from '../components/SpotList';
 import { SpotMap } from '../components/SpotMap';
 import { TwilightCard } from '../components/TwilightCard';
+import { Settle } from '../components/motion';
 import { useHorizons } from '../hooks/useHorizons';
 import { useLocation } from '../hooks/useLocation';
 import { useMapLayers } from '../hooks/useMapLayers';
@@ -33,7 +34,7 @@ import { bearingToHebrew, formatClock, formatCountdown, getEveningLight, getSuns
 import { formatDay, unsavedVisits } from '../lib/visits';
 import type { SkyTone } from '../lib/sky';
 import { withReach, type ShownSpot } from '../lib/travel';
-import { colors, fonts, getSkyPhase } from '../theme';
+import { colors, fonts, getSkyPhase, motion } from '../theme';
 
 /** Share of the screen height the map takes; the bottom sheet rises up cleanly over its lower edge. */
 const MAP_SHARE = 0.6;
@@ -48,6 +49,15 @@ const HUD_SPACE = 112;
 const MY_SPOTS_RADIUS_M = 25000;
 /** The sunset outlook's colour in the top bar: warm when it's worth going, cool when it isn't. */
 const SKY_COLOR: Record<SkyTone, string> = { great: '#FF8A4C', clear: '#F5C451', ok: '#E8D2BC', poor: '#A9BED3' };
+
+/** Tonight's big sunset time: settles in once when the HUD first appears (fade, rise, scale; blur on web). */
+function HudTime({ clock }: { clock: string }) {
+  return (
+    <Settle trigger="hud" options={{ scaleFrom: motion.settleScale, blur: true }}>
+      <Text style={styles.hudTime}>{clock}</Text>
+    </Settle>
+  );
+}
 
 export default function SunsetScreen() {
   const { state, retry } = useLocation();
@@ -174,7 +184,7 @@ export default function SunsetScreen() {
                     {info.isTomorrow ? 'השקיעה מחר' : 'השקיעה היום'}
                     {place ? ` · ${place}` : ''}
                   </Text>
-                  <Text style={styles.hudTime}>{sunsetClock}</Text>
+                  <HudTime clock={sunsetClock} />
                 </View>
               </View>
 

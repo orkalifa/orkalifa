@@ -1,10 +1,12 @@
-import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useMemo } from 'react';
+import { Linking, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle, Path, Text as SvgText } from 'react-native-svg';
 import { formatDistance } from '../lib/geo';
 import { KIND_LABEL } from '../lib/osm';
 import type { ScoredSpot } from '../lib/score';
 import { travelMinutes, type ShownSpot } from '../lib/travel';
-import { colors, fonts } from '../theme';
+import { colors, fonts, motionKey } from '../theme';
+import { Enter, PressableScale } from './motion';
 import { SpotPin } from './SpotPin';
 
 function openWaze(spot: ScoredSpot) {
@@ -32,6 +34,9 @@ export function SpotList({
   now?: Date;
   goldenHour?: Date;
 }) {
+  // The entrance replays only when which spots are shown (or their order) changes, not on each tick.
+  const entranceKey = useMemo(() => motionKey(spots.map((s) => s.id)), [spots]);
+
   if (spots.length === 0) {
     return <Text style={styles.empty}>{'לא נמצאו מקומות מסומנים בטווח של 10 ק"מ.'}</Text>;
   }
@@ -43,13 +48,10 @@ export function SpotList({
   return (
     <View style={styles.list}>
       {/* #1 Featured Hero Pick */}
-      <Pressable
+      <Enter trigger={entranceKey} index={0}>
+      <PressableScale
         onPress={() => onSelectSpot?.(best)}
-        style={({ pressed }) => [
-          styles.heroCard,
-          selectedId === best.id && styles.cardSelected,
-          pressed && styles.pressed,
-        ]}
+        style={[styles.heroCard, selectedId === best.id && styles.cardSelected]}
         accessibilityRole="button"
         accessibilityLabel={`המקום המומלץ: ${bestTitle}, ציון ${best.score}`}
       >
@@ -89,9 +91,9 @@ export function SpotList({
         )}
 
         <View style={styles.heroActions}>
-          <Pressable
+          <PressableScale
             onPress={() => openWaze(best)}
-            style={({ pressed }) => [styles.heroWazeBtn, pressed && styles.pressed]}
+            style={styles.heroWazeBtn}
             accessibilityRole="link"
             accessibilityLabel={`ניווט ב־Waze אל ${bestTitle}`}
           >
@@ -99,18 +101,19 @@ export function SpotList({
               <Path d="M3 11l18-8-8 18-2-8-8-2z" stroke="#FFF8F0" strokeWidth={2.2} strokeLinejoin="round" />
             </Svg>
             <Text style={styles.heroWazeText}>נווט ב־Waze</Text>
-          </Pressable>
+          </PressableScale>
 
-          <Pressable
+          <PressableScale
             onPress={() => onSelectSpot?.(best)}
-            style={({ pressed }) => [styles.detailsBtn, pressed && styles.pressed]}
+            style={styles.detailsBtn}
             accessibilityRole="button"
             accessibilityLabel={`פרטים נוספים על ${bestTitle}`}
           >
             <Text style={styles.detailsBtnText}>פרטים וציון</Text>
-          </Pressable>
+          </PressableScale>
         </View>
-      </Pressable>
+      </PressableScale>
+      </Enter>
 
       {/* Spots #2..#6 */}
       {rest.map((spot, idx) => {
@@ -118,15 +121,10 @@ export function SpotList({
         const driveMin = Math.max(1, Math.round(travelMinutes(spot.distance, 'car')));
         const title = spot.name ?? KIND_LABEL[spot.kind];
         return (
-          <Pressable
-            key={spot.id}
+          <Enter key={spot.id} trigger={entranceKey} index={idx + 1}>
+          <PressableScale
             onPress={() => onSelectSpot?.(spot)}
-            style={({ pressed }) => [
-              styles.row,
-              selectedId === spot.id && styles.cardSelected,
-              !spot.reach.inTime && styles.rowLate,
-              pressed && styles.pressed,
-            ]}
+            style={[styles.row, selectedId === spot.id && styles.cardSelected, !spot.reach.inTime && styles.rowLate]}
             accessibilityRole="button"
             accessibilityLabel={`מקום ${rank}: ${title}, ציון ${spot.score}`}
           >
@@ -152,9 +150,9 @@ export function SpotList({
               </Text>
             </View>
 
-            <Pressable
+            <PressableScale
               onPress={() => openWaze(spot)}
-              style={({ pressed }) => [styles.wazeCircle, pressed && styles.pressed]}
+              style={styles.wazeCircle}
               accessibilityRole="link"
               accessibilityLabel={`ניווט ב־Waze אל ${title}`}
               hitSlop={6}
@@ -162,8 +160,9 @@ export function SpotList({
               <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
                 <Path d="M3 11l18-8-8 18-2-8-8-2z" stroke={colors.ink} strokeWidth={2.1} strokeLinejoin="round" />
               </Svg>
-            </Pressable>
-          </Pressable>
+            </PressableScale>
+          </PressableScale>
+          </Enter>
         );
       })}
     </View>
@@ -316,6 +315,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  pressed: { opacity: 0.86, transform: [{ scale: 0.985 }] },
   empty: { fontFamily: fonts.regular, fontSize: 14, color: colors.muted, textAlign: 'center', paddingVertical: 12 },
 });
