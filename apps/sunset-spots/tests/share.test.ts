@@ -1,7 +1,7 @@
 /// <reference types="node" />
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildShareUrl, parseSharedSpot, shareMessage, PUBLIC_URL } from '../src/lib/share.ts';
+import { buildShareUrl, cleanName, parseSharedSpot, shareMessage, PUBLIC_URL } from '../src/lib/share.ts';
 import { isMine, makeMySpot, parseStored, toSpot } from '../src/lib/myspots.ts';
 import { scoreSpot } from '../src/lib/score.ts';
 
@@ -26,8 +26,56 @@ test('broken or missing parameters give no spot', () => {
   assert.equal(parseSharedSpot({ spot: 'node/1', ll: '95,10' }), null);
 });
 
+test('a link the app shares today still opens', () => {
+  // Frozen copies of what buildShareUrl wrote before D5: links already sent must keep working.
+  const peak =
+    'https://orkalifa.github.io/orkalifa/?spot=node%2F246825278&ll=31.82407,35.13018&k=peak&n=%D7%92%D7%91%D7%A2%D7%AA%20%D7%94%D7%A8%D7%93%D7%90%D7%A8';
+  assert.deepEqual(parseSharedSpot(query(peak)), {
+    id: 'node/246825278', kind: 'peak', lat: 31.82407, lon: 35.13018, name: 'גבעת הרדאר',
+  });
+  const mine = 'https://orkalifa.github.io/orkalifa/?spot=mine%2Flx3k9a0b&ll=32.10000,34.90000&k=mine';
+  assert.deepEqual(parseSharedSpot(query(mine)), { id: 'mine/lx3k9a0b', kind: 'mine', lat: 32.1, lon: 34.9, name: undefined });
+});
+
+test('coordinates must be exactly two numbers in range', () => {
+  for (const ll of ['32,', ',35', '1,2,3', 'Infinity,0', '1e1,2', '0x10,2', '32,181', '-91,0', ' 32,35', '32 ,35', '']) {
+    assert.equal(parseSharedSpot({ spot: 'node/1', ll }), null, `ll=${JSON.stringify(ll)}`);
+  }
+  assert.deepEqual(parseSharedSpot({ spot: 'node/1', ll: '-33.5,-70.6' }), { id: 'node/1', kind: 'viewpoint', lat: -33.5, lon: -70.6, name: undefined });
+  assert.equal(parseSharedSpot({ spot: 'node/1', ll: '90,180' })?.lon, 180);
+  assert.equal(parseSharedSpot({ spot: 'node/1', ll: '-0.00000,0.00000' })?.lat, -0);
+});
+
+test('a strange id gives no spot', () => {
+  for (const id of ['<script>', 'node/1 2', 'node/' + '1'.repeat(30), '', '../x', 'node/', '/1', 'Node/1']) {
+    assert.equal(parseSharedSpot({ spot: id, ll: '32,35' }), null, `id=${JSON.stringify(id)}`);
+  }
+  assert.equal(parseSharedSpot({ spot: 'relation/42', ll: '32,35' })?.id, 'relation/42');
+});
+
+test('names lose control and bidi characters and are capped', () => {
+  assert.equal(cleanName('א\u202Eב\nג\u0007'), 'א ב ג');
+  assert.equal(cleanName('a\u2066b\u2069c\u202Ad\u0085e\u007F'), 'a b c d e');
+  assert.equal(cleanName('\u202E\u2066'), undefined);
+  assert.equal(cleanName('   '), undefined);
+  assert.equal(cleanName(undefined), undefined);
+  assert.equal(cleanName('\u200Fא'), '\u200Fא', 'RLM stays');
+  assert.equal(Array.from(cleanName('א'.repeat(200))!).length, 60);
+  const emoji = cleanName('a'.repeat(59) + '\u{1F305}xyz')!;
+  assert.equal(emoji, 'a'.repeat(59) + '\u{1F305}', 'the emoji is kept whole');
+  assert.equal(parseSharedSpot({ spot: 'node/1', ll: '32,35', n: 'x\u202Ey' })?.name, 'x y');
+});
+
+test('the share message and link never carry a bidi override', () => {
+  const dirty = { id: 'node/1', kind: 'bench' as const, lat: 32, lon: 35, name: 'evil\u202Etxt.exe' };
+  assert.ok(!shareMessage(dirty, '16:41', false).includes('\u202E'));
+  const url = buildShareUrl(dirty);
+  assert.ok(!decodeURIComponent(url).includes('\u202E'));
+  assert.equal(parseSharedSpot(query(url))?.name, 'evil txt.exe');
+});
+
 test('an unknown kind falls back to a viewpoint', () => {
-  assert.equal(parseSharedSpot({ spot: 'x', ll: '32,35', k: 'castle' })?.kind, 'viewpoint');
+  assert.equal(parseSharedSpot({ spot: 'node/1', ll: '32,35', k: 'castle' })?.kind, 'viewpoint');
 });
 
 test('share message names the place and the time', () => {
