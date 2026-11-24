@@ -6,6 +6,7 @@ import {
   SAMPLE_DISTANCES_M,
   elevationAngle,
   elevationRequestUrls,
+  fetchHorizons,
   horizonFromElevations,
   horizonRequestPoints,
   horizonScore,
@@ -117,4 +118,46 @@ test('a mixed list keeps one ray per spot, in order', () => {
   assert.equal(pts.length, 2 * per);
   assert.deepEqual(pts.slice(0, per), samplePoints({ lat: 31.4, lon: 34.6 }, 260));
   assert.deepEqual(pts.slice(per), samplePoints({ lat: 31.123, lon: 34.654 }, 260));
+});
+
+// ---- fetchHorizons with a mocked fetch (no network) ----
+
+const pointCount = (url: unknown) => new URL(String(url)).searchParams.get('latitude')!.split(',').length;
+
+/** A fetch answering flat ground for as many points as the URL asks for. */
+const flatFetch = (status = 200) => async (input: unknown) =>
+  new Response(JSON.stringify({ elevation: Array(pointCount(input)).fill(10) }), { status });
+
+const manySpots = (n: number) => Array.from({ length: n }, (_, i) => ({ id: `s${i}`, lat: 31.4 + i / 100, lon: 34.6 }));
+
+test('fetchHorizons: 7 spots × 17 points go in two requests and parse per spot', async (t) => {
+  const mock = t.mock.method(globalThis, 'fetch', flatFetch());
+  const result = await fetchHorizons(manySpots(7), 260);
+  assert.equal(mock.mock.callCount(), 2);
+  assert.deepEqual(mock.mock.calls.map((c) => pointCount(c.arguments[0])), [100, 19]);
+  assert.deepEqual(Object.keys(result), manySpots(7).map((s) => s.id));
+  for (const h of Object.values(result)) assert.ok(h.angle < 0.5 && !h.sea);
+});
+
+test("fetchHorizons: a saved place's exact position is in no request; the signal is passed on", async (t) => {
+  const mock = t.mock.method(globalThis, 'fetch', flatFetch());
+  const controller = new AbortController();
+  await fetchHorizons([{ id: 'm', kind: 'mine', lat: 31.123456, lon: 34.654321 }], 260, controller.signal);
+  const url = String(mock.mock.calls[0].arguments[0]);
+  assert.ok(!url.includes('31.12346') && !url.includes('34.65432'), url);
+  assert.ok(url.includes('31.12300'), url);
+  assert.equal((mock.mock.calls[0].arguments[1] as RequestInit).signal, controller.signal);
+});
+
+test('fetchHorizons: an HTTP error on any chunk rejects', async (t) => {
+  let calls = 0;
+  t.mock.method(globalThis, 'fetch', async (input: unknown) => flatFetch(++calls === 2 ? 500 : 200)(input));
+  await assert.rejects(fetchHorizons(manySpots(7), 260), /Open-Meteo 500/);
+});
+
+test('fetchHorizons: a partial or empty answer rejects instead of misaligning spots', async (t) => {
+  const mock = t.mock.method(globalThis, 'fetch', async () => new Response(JSON.stringify({ elevation: Array(16).fill(10) })));
+  await assert.rejects(fetchHorizons(manySpots(1), 260), /mismatch/);
+  mock.mock.mockImplementation(async () => new Response(JSON.stringify({ error: true, reason: 'x' })));
+  await assert.rejects(fetchHorizons(manySpots(1), 260), /mismatch/);
 });

@@ -1,7 +1,7 @@
 /// <reference types="node" />
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { forecastUrl, hourAt, rateSunset, verdictFromForecast } from '../src/lib/sky.ts';
+import { fetchSkyVerdict, forecastUrl, hourAt, rateSunset, verdictFromForecast } from '../src/lib/sky.ts';
 
 const sky = (low: number, mid: number, high: number, rain = 0) => ({ low, mid, high, rain });
 
@@ -56,4 +56,46 @@ test('a two-place forecast answer turns into a verdict', () => {
   assert.equal(verdictFromForecast([{ hourly: hourly(5, 60) }, { hourly: hourly(10, 0) }], sunset)?.tone, 'great');
   assert.equal(verdictFromForecast([{ hourly: hourly(5, 60) }, { hourly: hourly(80, 0) }], sunset)?.tone, 'poor');
   assert.equal(verdictFromForecast({ error: true }, sunset), null);
+});
+
+// ---- fetchSkyVerdict with a mocked fetch (no network) ----
+
+const HERE = { lat: 32.08531, lon: 34.77004 };
+const SUNSET = new Date(1001 * 3600 * 1000);
+const answer = (body: unknown, status = 200) => async () => new Response(JSON.stringify(body), { status });
+
+test('fetchSkyVerdict: one request, rounded to ~1 km, parsed into a verdict', async (t) => {
+  const mock = t.mock.method(globalThis, 'fetch', answer([{ hourly: hourly(5, 60) }, { hourly: hourly(10, 0) }]));
+  const verdict = await fetchSkyVerdict(HERE, 260, SUNSET);
+  assert.equal(verdict?.tone, 'great');
+  assert.equal(mock.mock.callCount(), 1);
+  const url = String(mock.mock.calls[0].arguments[0]);
+  assert.equal(url, forecastUrl(HERE, 260));
+  const q = new URL(url).searchParams;
+  for (const v of [...q.get('latitude')!.split(','), ...q.get('longitude')!.split(',')]) {
+    assert.match(v, /^-?\d+(\.\d{1,2})?$/, `${v} has at most 2 decimals`);
+  }
+  assert.ok(!url.includes('32.085') && !url.includes('34.770'), 'exact position not sent');
+  assert.equal(q.get('timeformat'), 'unixtime');
+});
+
+test('fetchSkyVerdict: an HTTP error rejects', async (t) => {
+  t.mock.method(globalThis, 'fetch', answer({ error: true }, 503));
+  await assert.rejects(fetchSkyVerdict(HERE, 260, SUNSET), /HTTP 503/);
+});
+
+test('fetchSkyVerdict: a partial answer gives no verdict instead of throwing', async (t) => {
+  const mock = t.mock.method(globalThis, 'fetch', answer([{ hourly: hourly(5, 60) }]));
+  assert.equal(await fetchSkyVerdict(HERE, 260, SUNSET), null, 'only one place');
+  mock.mock.mockImplementation(answer([{ hourly: hourly(5, 60) }, {}]));
+  assert.equal(await fetchSkyVerdict(HERE, 260, SUNSET), null, 'horizon place without hourly');
+  mock.mock.mockImplementation(answer([{ hourly: hourly(5, 60) }, { hourly: hourly(10, 0) }]));
+  assert.equal(await fetchSkyVerdict(HERE, 260, new Date(2000 * 3600 * 1000)), null, 'sunset beyond the forecast');
+});
+
+test('fetchSkyVerdict: missing cloud values count as clear', async (t) => {
+  const none = [null, null, null];
+  const gaps = { ...hourly(0, 0), cloud_cover_low: none, cloud_cover_mid: none, cloud_cover_high: none };
+  t.mock.method(globalThis, 'fetch', answer([{ hourly: gaps }, { hourly: gaps }]));
+  assert.equal((await fetchSkyVerdict(HERE, 260, SUNSET))?.tone, 'clear');
 });
