@@ -10,8 +10,9 @@ const MAX_CHECKED = 18;
 export type HorizonsState = { status: 'idle' | 'ready' | 'error'; horizons: Record<string, Horizon> };
 
 /**
- * Terrain horizon toward the sunset for the most promising spots. Spots without a result
- * keep their provisional view score, so the list is usable while this loads or if it fails.
+ * Terrain horizon toward the sunset for the most promising spots. While this loads or if it fails
+ * (no results at all) every spot keeps its provisional score, so the list is usable. Once results exist,
+ * spots outside the checked set are marked 'האופק עוד לא נבדק' and discounted in `rankSpots`.
  */
 export function useHorizons(spots: Spot[] | null, coords: Coords | null, bearing: number | null): HorizonsState {
   const [state, setState] = useState<HorizonsState>({ status: 'idle', horizons: {} });

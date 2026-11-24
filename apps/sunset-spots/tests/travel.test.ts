@@ -55,6 +55,7 @@ test('withReach colours by arrival and puts spots you would miss last', async ()
     access: 0,
     pleasant: 0,
     reasons: [],
+    horizonChecked: true,
   });
   // Ranked by score: the far viewpoint first, but on foot you'd only make the near bench.
   const ranked = [spot('far', 4000, 90), spot('near', 600, 70)];

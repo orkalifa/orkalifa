@@ -9,6 +9,11 @@ export type ScoredSpot = Spot & {
   pleasant: number;
   score: number;
   reasons: string[];
+  /**
+   * Whether the terrain toward the sunset was checked: true = checked, false = not checked although
+   * checks ran for other spots (marked and discounted), null = no check has produced a result yet.
+   */
+  horizonChecked: boolean | null;
 };
 
 const CARDINAL: Record<string, number> = {
@@ -42,6 +47,27 @@ function withinArc(bearing: number, arc: { from: number; to: number }, slack: nu
   return offset <= span + 2 * slack;
 }
 
+/** Total-score multiplier for terrain above the sunset line, by angle (degrees). Linear between points. */
+const BLOCKED_STEPS: [number, number][] = [[2, 1], [3, 0.75], [5, 0.5], [8, 0.3]];
+
+/**
+ * A blocked sun is a strong penalty on the whole score, not just a lower view ring:
+ * up to 2° nothing, then ×0.75 at 3°, ×0.5 at 5°, ×0.3 from 8°.
+ */
+export function blockedFactor({ angle }: Horizon): number {
+  if (!(angle > BLOCKED_STEPS[0][0])) return 1;
+  for (let i = 1; i < BLOCKED_STEPS.length; i++) {
+    const [a0, f0] = BLOCKED_STEPS[i - 1];
+    const [a1, f1] = BLOCKED_STEPS[i];
+    if (angle <= a1) return f0 + ((angle - a0) / (a1 - a0)) * (f1 - f0);
+  }
+  return BLOCKED_STEPS[BLOCKED_STEPS.length - 1][1];
+}
+
+/** A spot left out of the terrain check can't outrank checked open-horizon spots on its base view alone. */
+export const UNCHECKED_FACTOR = 0.85;
+export const UNCHECKED_REASON = 'האופק עוד לא נבדק';
+
 const clamp = (n: number) => Math.max(0, Math.min(100, Math.round(n)));
 
 // A place you saved yourself is one you already know is good for the sunset.
@@ -51,6 +77,9 @@ const BASE_VIEW: Record<SpotKind, number> = { viewpoint: 85, peak: 80, picnic: 6
  * Scores a spot for tonight. `viewWeight` is the "comfort ↔ view" slider: 0 = only comfort, 1 = only view.
  * With a `horizon` (terrain check) the view score is mostly how open the horizon is toward the sunset;
  * without one it falls back to the spot type and its OSM `direction`. Access is distance from you for now.
+ * A horizon above ~2° multiplies the whole score down (`blockedFactor`). `checksRan` says whether the terrain
+ * check has produced results for any spot: if so, a spot without a horizon is marked unchecked and discounted;
+ * if not (still loading, or the check failed) every spot is scored on the base formula, unmarked.
  */
 export function scoreSpot(
   spot: Spot,
@@ -58,6 +87,7 @@ export function scoreSpot(
   sunsetBearing: number,
   viewWeight = 0.4,
   horizon?: Horizon,
+  checksRan = true,
 ): ScoredSpot {
   const reasons: string[] = [];
   const kinds = new Set<SpotKind>([spot.kind, ...spot.nearby]);
@@ -78,6 +108,8 @@ export function scoreSpot(
     else if (horizon.angle <= 0.5) reasons.push('אופק פתוח');
     else if (horizon.angle > 2) reasons.push('האופק חסום חלקית');
   }
+  const unchecked = !horizon && checksRan;
+  if (unchecked) reasons.push(UNCHECKED_REASON);
   if (spot.kind === 'viewpoint') reasons.push('נקודת תצפית');
   if (spot.kind === 'peak') reasons.push('פסגה');
   if (spot.kind === 'mine') reasons.push('המקום שלך');
@@ -105,8 +137,10 @@ export function scoreSpot(
   const v = clamp(view);
   const a = clamp(access);
   const p = clamp(pleasant);
-  const score = clamp(viewWeight * v + (1 - viewWeight) * ((a + p) / 2));
-  return { ...spot, distance, view: v, access: a, pleasant: p, score, reasons };
+  const factor = horizon ? blockedFactor(horizon) : unchecked ? UNCHECKED_FACTOR : 1;
+  const score = clamp((viewWeight * v + (1 - viewWeight) * ((a + p) / 2)) * factor);
+  const horizonChecked = horizon ? true : unchecked ? false : null;
+  return { ...spot, distance, view: v, access: a, pleasant: p, score, reasons, horizonChecked };
 }
 
 export function rankSpots(
@@ -116,7 +150,8 @@ export function rankSpots(
   viewWeight = 0.4,
   horizons: Record<string, Horizon> = {},
 ): ScoredSpot[] {
+  const checksRan = Object.keys(horizons).length > 0;
   return spots
-    .map((s) => scoreSpot(s, from, sunsetBearing, viewWeight, horizons[s.id]))
+    .map((s) => scoreSpot(s, from, sunsetBearing, viewWeight, horizons[s.id], checksRan))
     .sort((a, b) => b.score - a.score);
 }
