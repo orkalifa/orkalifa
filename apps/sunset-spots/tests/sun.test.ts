@@ -5,6 +5,7 @@ import {
   angleBetween,
   bearingToHebrew,
   formatCountdown,
+  getEveningLight,
   getSunsetInfo,
   normalizeBearing,
 } from '../src/lib/sun.ts';
@@ -133,4 +134,86 @@ test('golden hour, sunset and blue hour come in order, minutes apart', () => {
   // In Israel the sun sinks fast: ~15–20 min from sunset to -4°, and the blue hour is ~8–12 min.
   assert.ok(min(t[2] - t[1]) > 10 && min(t[2] - t[1]) < 25, `sunset→blue ${min(t[2] - t[1])}`);
   assert.ok(min(t[3] - t[2]) > 5 && min(t[3] - t[2]) < 15, `blue hour ${min(t[3] - t[2])}`);
+});
+
+// ---- getEveningLight: known values around Israel's clock changes ----
+// Instants are given in UTC so the result never depends on the machine's time zone.
+
+const near = (actual: Date, expectedIso: string, label: string, toleranceMin = 3) => {
+  const diff = Math.abs(actual.getTime() - Date.parse(expectedIso)) / 60000;
+  assert.ok(diff <= toleranceMin, `${label}: ${actual.toISOString()} vs ${expectedIso}`);
+};
+const israelHour = (d: Date) =>
+  Number(d.toLocaleString('en-GB', { timeZone: 'Asia/Jerusalem', hour: '2-digit', hourCycle: 'h23' }));
+
+test("evening light on Israel's spring-forward day (Fri 27 Mar 2026)", () => {
+  // 01:30 IST, before the 02:00 jump, and late morning (IDT): the same evening either way.
+  for (const now of ['2026-03-26T23:30:00Z', '2026-03-27T10:00:00Z']) {
+    const e = getEveningLight(LAT, LON, new Date(now));
+    assert.ok(e);
+    assert.equal(e.isTomorrow, false, now);
+    near(e.goldenHour, '2026-03-27T15:25:00Z', 'golden hour');
+    near(e.sunset, '2026-03-27T15:57:00Z', 'sunset');
+    near(e.blueHour, '2026-03-27T16:12:00Z', 'blue hour');
+    near(e.blueHourEnd, '2026-03-27T16:21:30Z', 'blue hour end');
+    assert.equal(israelHour(e.sunset), 18, 'sunset is 18:57 summer time');
+  }
+});
+
+test("evening light on Israel's fall-back day (Sun 25 Oct 2026)", () => {
+  // 01:30 IDT, before the 02:00 change, and late morning (IST).
+  for (const now of ['2026-10-24T22:30:00Z', '2026-10-25T10:00:00Z']) {
+    const e = getEveningLight(LAT, LON, new Date(now));
+    assert.ok(e);
+    assert.equal(e.isTomorrow, false, now);
+    near(e.goldenHour, '2026-10-25T14:24:00Z', 'golden hour');
+    near(e.sunset, '2026-10-25T14:57:45Z', 'sunset');
+    near(e.blueHour, '2026-10-25T15:13:00Z', 'blue hour');
+    near(e.blueHourEnd, '2026-10-25T15:22:40Z', 'blue hour end');
+    assert.equal(israelHour(e.sunset), 16, 'sunset is 16:57 winter time');
+  }
+});
+
+test("after sunset, tonight's light stays on screen through the blue hour", () => {
+  // 24 Nov 2026: sunset ~14:37Z (16:37), blue hour ends ~15:03Z.
+  const justAfter = new Date('2026-11-24T14:50:00Z');
+  const tonight = getEveningLight(LAT, LON, justAfter)!;
+  assert.equal(tonight.isTomorrow, false);
+  near(tonight.sunset, '2026-11-24T14:37:20Z', 'sunset');
+  assert.ok(tonight.sunset < justAfter && justAfter < tonight.blueHourEnd);
+  // getSunsetInfo has already moved on to tomorrow at the same moment.
+  assert.equal(getSunsetInfo(LAT, LON, justAfter)!.isTomorrow, true);
+
+  // At the very end of the blue hour (and after it) it's tomorrow's evening.
+  for (const now of [tonight.blueHourEnd, new Date('2026-11-24T15:05:00Z')]) {
+    const next = getEveningLight(LAT, LON, now)!;
+    assert.equal(next.isTomorrow, true);
+    near(next.sunset, '2026-11-25T14:37:00Z', 'tomorrow sunset');
+  }
+});
+
+test('just after local midnight the evening is still the coming one', () => {
+  // 00:30 IST on 24 Nov is 22:30Z on the 23rd.
+  const e = getEveningLight(LAT, LON, new Date('2026-11-23T22:30:00Z'))!;
+  assert.equal(e.isTomorrow, false);
+  near(e.sunset, '2026-11-24T14:37:20Z', 'sunset');
+});
+
+test('evening light bounds are in order and agree with getSunsetInfo before sunset', () => {
+  for (const day of ['2026-03-27', '2026-06-21', '2026-10-25', '2026-12-21']) {
+    const now = new Date(`${day}T08:00:00Z`);
+    const e = getEveningLight(LAT, LON, now)!;
+    const info = getSunsetInfo(LAT, LON, now)!;
+    assert.equal(e.sunset.getTime(), info.sunset.getTime(), day);
+    assert.equal(e.blueHourEnd.getTime(), info.blueHourEnd.getTime(), day);
+    const min = (a: Date, b: Date) => (b.getTime() - a.getTime()) / 60000;
+    assert.ok(min(e.goldenHour, e.sunset) > 25 && min(e.goldenHour, e.sunset) < 45, `${day} golden`);
+    assert.ok(min(e.sunset, e.blueHour) > 10 && min(e.sunset, e.blueHour) < 25, `${day} sunset to blue`);
+    assert.ok(min(e.blueHour, e.blueHourEnd) > 5 && min(e.blueHour, e.blueHourEnd) < 15, `${day} blue`);
+  }
+});
+
+test('evening light is null in polar day and polar night', () => {
+  assert.equal(getEveningLight(78, 15, new Date('2026-06-21T12:00:00Z')), null);
+  assert.equal(getEveningLight(78, 15, new Date('2026-12-21T12:00:00Z')), null);
 });
