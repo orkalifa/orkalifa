@@ -1,5 +1,5 @@
-import { memo, useMemo, useState } from 'react';
-import { LayoutChangeEvent, StyleSheet, View } from 'react-native';
+import { memo, useMemo, useRef, useState, type ComponentRef } from 'react';
+import { Pressable, StyleSheet, type GestureResponderEvent, type LayoutChangeEvent } from 'react-native';
 import Svg, { Circle, Defs, Ellipse, G, LinearGradient, Path, RadialGradient, Rect, Stop, Text as SvgText } from 'react-native-svg';
 import type { LatLon } from '../lib/geo';
 import { edgePoint, layoutLabels, makeProjection, shapePath, type Box, type PlacedLabel, type Projection } from '../lib/mapview';
@@ -52,6 +52,8 @@ type Props = {
   top?: number;
   selectedId?: string | null;
   onSelectSpot?: (spot: ShownSpot) => void;
+  /** Long-press on the map: the place under your finger. */
+  onLongPressPoint?: (point: LatLon) => void;
 };
 
 /** Pin size in px: the best spot's pin is bigger. Its tip is the spot. */
@@ -65,8 +67,17 @@ const pinSize = (rank: number, selected: boolean) => {
  * The main map: north-up, you in the middle, real fields, built-up areas, chunky white roads and
  * settlement names from OpenFreeMap, sunlit horizon wash, sunset beam, and tappable spot pins.
  */
-export function SpotMap({ from, sunsetBearing, spots, layers, range, height, top = 0, selectedId = null, onSelectSpot }: Props) {
+export function SpotMap({ from, sunsetBearing, spots, layers, range, height, top = 0, selectedId = null, onSelectSpot, onLongPressPoint }: Props) {
   const [width, setWidth] = useState(0);
+  const boxRef = useRef<ComponentRef<typeof Pressable>>(null);
+  const onLongPress = (e: GestureResponderEvent) => {
+    const { pageX, pageY } = e.nativeEvent;
+    // Measured now, not on layout: the map scrolls with the sheet.
+    boxRef.current?.measureInWindow((x, y) => {
+      const proj = makeProjection(from, width, height, range, top);
+      onLongPressPoint?.(proj.toLatLon({ x: pageX - x, y: pageY - y }));
+    });
+  };
   const onLayout = (e: LayoutChangeEvent) => setWidth(e.nativeEvent.layout.width);
   const { lat, lon } = from;
 
@@ -89,7 +100,14 @@ export function SpotMap({ from, sunsetBearing, spots, layers, range, height, top
   }, [layers.places, lat, lon, width, height, range, top, pinKey, bearingKey]);
 
   return (
-    <View style={[styles.box, { height }]} onLayout={onLayout} accessibilityLabel="מפת המקומות סביבך">
+    <Pressable
+      ref={boxRef}
+      style={[styles.box, { height }]}
+      onLayout={onLayout}
+      onLongPress={onLongPressPoint ? onLongPress : undefined}
+      delayLongPress={450}
+      accessibilityLabel="מפת המקומות סביבך. לחיצה ארוכה שומרת נקודה."
+    >
       {width > 0 && (
         <Svg width={width} height={height}>
           <BaseLayers lat={lat} lon={lon} width={width} height={height} top={top} range={range} layers={layers} />
@@ -103,7 +121,7 @@ export function SpotMap({ from, sunsetBearing, spots, layers, range, height, top
           />
         </Svg>
       )}
-    </View>
+    </Pressable>
   );
 }
 

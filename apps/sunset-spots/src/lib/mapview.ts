@@ -18,6 +18,8 @@ export type Projection = {
   center: Point;
   pxPerMeter: number;
   toXY: (p: LatLon) => Point;
+  /** The place under a point on the map. */
+  toLatLon: (p: Point) => LatLon;
 };
 
 /**
@@ -38,6 +40,10 @@ export function makeProjection(from: LatLon, width: number, height: number, rang
     toXY: (p) => ({
       x: center.x + (p.lon - from.lon) * lonScale * pxPerMeter,
       y: center.y - (p.lat - from.lat) * METERS_PER_DEG_LAT * pxPerMeter,
+    }),
+    toLatLon: (p) => ({
+      lat: from.lat - (p.y - center.y) / (METERS_PER_DEG_LAT * pxPerMeter),
+      lon: from.lon + (p.x - center.x) / (lonScale * pxPerMeter),
     }),
   };
 }

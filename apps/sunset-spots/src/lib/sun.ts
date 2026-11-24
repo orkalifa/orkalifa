@@ -41,6 +41,26 @@ export function getSunsetInfo(lat: number, lon: number, now: Date = new Date()):
   return { sunset, goldenHour, bearing: normalizeBearing(azimuth), isTomorrow, blueHour, blueHourEnd: dusk };
 }
 
+export type EveningLight = { goldenHour: Date; sunset: Date; blueHour: Date; blueHourEnd: Date; isTomorrow: boolean };
+
+/**
+ * Golden hour, sunset and blue hour for this evening — until the blue hour is over, then tomorrow's.
+ * Unlike getSunsetInfo, which looks ahead to tomorrow the moment the sun sets, so the 10–20 minutes
+ * of light after sunset still show as tonight's.
+ */
+export function getEveningLight(lat: number, lon: number, now: Date = new Date()): EveningLight | null {
+  const pick = (day: Date) => {
+    const t = getTimes(day, lat, lon);
+    const blueHour = t[BLUE_START];
+    if (!t.goldenHour || !t.sunset || !t.dusk || !(blueHour instanceof Date)) return null;
+    return { goldenHour: t.goldenHour, sunset: t.sunset, blueHour, blueHourEnd: t.dusk };
+  };
+  const today = pick(now);
+  if (today && today.blueHourEnd.getTime() > now.getTime()) return { ...today, isTomorrow: false };
+  const tomorrow = pick(new Date(now.getTime() + DAY_MS));
+  return tomorrow ? { ...tomorrow, isTomorrow: true } : null;
+}
+
 // Eight points are plenty to know which way to face, and short enough to read at a glance.
 // Across Israel the sunset is always דרום־מערב, מערב or צפון־מערב.
 const DIRECTIONS = ['צפון', 'צפון־מזרח', 'מזרח', 'דרום־מזרח', 'דרום', 'דרום־מערב', 'מערב', 'צפון־מערב'];

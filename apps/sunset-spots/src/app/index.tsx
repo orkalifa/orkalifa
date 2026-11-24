@@ -4,6 +4,7 @@ import { Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions,
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Path } from 'react-native-svg';
 import { AddSpotSheet } from '../components/AddSpotSheet';
+import { MySpotsButton, MySpotsSheet } from '../components/MySpotsSheet';
 import { CompassButton, CompassSheet } from '../components/CompassSheet';
 import { SpotDetailSheet } from '../components/SpotDetailSheet';
 import { SpotList } from '../components/SpotList';
@@ -13,17 +14,19 @@ import { useHorizons } from '../hooks/useHorizons';
 import { useLocation } from '../hooks/useLocation';
 import { useMapLayers } from '../hooks/useMapLayers';
 import { useMySpots } from '../hooks/useMySpots';
+import { useVisits } from '../hooks/useVisits';
 import { useNow } from '../hooks/useNow';
 import { usePlaceName } from '../hooks/usePlaceName';
 import { useSpots } from '../hooks/useSpots';
-import { distanceMeters } from '../lib/geo';
+import { distanceMeters, type LatLon } from '../lib/geo';
 import { mapRange } from '../lib/mapview';
 import { isMine, toSpot } from '../lib/myspots';
 import type { Spot } from '../lib/osm';
 import { rankSpots, scoreSpot } from '../lib/score';
 import { parseSharedSpot } from '../lib/share';
 import { shareSpot } from '../lib/shareSpot';
-import { bearingToHebrew, formatClock, formatCountdown, getSunsetInfo } from '../lib/sun';
+import { bearingToHebrew, formatClock, formatCountdown, getEveningLight, getSunsetInfo } from '../lib/sun';
+import { formatDay, unsavedVisits } from '../lib/visits';
 import { withReach, type ShownSpot } from '../lib/travel';
 import { colors, fonts, getSkyPhase } from '../theme';
 
@@ -41,16 +44,21 @@ const MY_SPOTS_RADIUS_M = 25000;
 
 export default function SunsetScreen() {
   const { state, retry } = useLocation();
+  const mySpots = useMySpots();
   const now = useNow();
   const insets = useSafeAreaInsets();
   const { height: windowHeight } = useWindowDimensions();
   const coords = state.status === 'loading' ? null : state.coords;
   const spots = useSpots(coords);
-  const mySpots = useMySpots();
+  const place = usePlaceName(state.status === 'ready' ? state.coords : null);
   // A shared link (?spot=…&ll=…) opens straight on that spot's card.
   const shared = parseSharedSpot(useLocalSearchParams());
-  const place = usePlaceName(state.status === 'ready' ? state.coords : null);
   const info = coords ? getSunsetInfo(coords.latitude, coords.longitude, now) : null;
+  // Tonight's light stays on screen through the blue hour, after the sunset info has moved to tomorrow.
+  const light = coords ? getEveningLight(coords.latitude, coords.longitude, now) : null;
+  // A real fix (not last time's location): the only one worth saving or remembering.
+  const here: LatLon | null = state.status === 'ready' && state.fresh && state.here ? { lat: state.here.latitude, lon: state.here.longitude } : null;
+  const visits = useVisits(here, light, now, mySpots.spots, place);
   const lat = coords?.latitude;
   const lon = coords?.longitude;
   // Memoised: the terrain check refetches whenever this list changes.
@@ -61,7 +69,9 @@ export default function SunsetScreen() {
   }, [spots.state, mySpots.spots, lat, lon]);
   const horizons = useHorizons(pool, coords, info?.bearing ?? null);
   const [compassOpen, setCompassOpen] = useState(false);
-  const [addOpen, setAddOpen] = useState(false);
+  const [mineOpen, setMineOpen] = useState(false);
+  /** The place being named and saved, and how it's described in the sheet. */
+  const [toSave, setToSave] = useState<{ point: LatLon; subtitle: string } | null>(null);
   const [selectedSpotId, setSelectedSpotId] = useState<string | null>(() => shared?.id ?? null);
   const [shareNote, setShareNote] = useState<string | null>(null);
 
@@ -73,23 +83,28 @@ export default function SunsetScreen() {
     ranked = withReach([...top, ...moreOfMine], 'car', now, info.goldenHour, info.sunset);
   }
 
+  const scoreFromHere = (spot: Spot): ShownSpot | null => {
+    if (!coords || !info) return null;
+    const scored = scoreSpot(spot, { lat: coords.latitude, lon: coords.longitude }, info.bearing, VIEW_WEIGHT, horizons.horizons[spot.id]);
+    return withReach([scored], 'car', now, info.goldenHour, info.sunset)[0];
+  };
+
   // A shared spot that isn't in your list (far away, or someone else's own place) is scored from here.
   let sharedShown: ShownSpot | null = null;
-  if (shared && coords && info && !ranked?.some((s) => s.id === shared.id)) {
+  if (shared && !ranked?.some((s) => s.id === shared.id)) {
     const ownedHere = mySpots.spots.some((s) => s.id === shared.id);
-    const spot: Spot = {
-      ...shared,
-      // Someone else's own place isn't "yours" here.
-      kind: shared.kind === 'mine' && !ownedHere ? 'viewpoint' : shared.kind,
-      tags: {},
-      nearby: [],
-    };
-    const scored = scoreSpot(spot, { lat: coords.latitude, lon: coords.longitude }, info.bearing, VIEW_WEIGHT, horizons.horizons[spot.id]);
-    sharedShown = withReach([scored], 'car', now, info.goldenHour, info.sunset)[0];
+    // Someone else's own place isn't "yours" here.
+    sharedShown = scoreFromHere({ ...shared, kind: shared.kind === 'mine' && !ownedHere ? 'viewpoint' : shared.kind, tags: {}, nearby: [] });
   }
 
+  const mineSelected = mySpots.spots.find((s) => s.id === selectedSpotId);
   const selectedSpot: ShownSpot | null =
-    ranked?.find((s) => s.id === selectedSpotId) ?? (sharedShown?.id === selectedSpotId ? sharedShown : null);
+    ranked?.find((s) => s.id === selectedSpotId) ??
+    (sharedShown?.id === selectedSpotId ? sharedShown : null) ??
+    (mineSelected ? scoreFromHere(toSpot(mineSelected)) : null);
+  // On the map too: the shared spot, and your own one you opened from far away.
+  const mapSpots = [...(ranked ?? []), ...(sharedShown ? [sharedShown] : [])];
+  if (selectedSpot && !mapSpots.some((s) => s.id === selectedSpot.id)) mapSpots.push(selectedSpot);
   const selectedIsMine = !!selectedSpot && mySpots.spots.some((s) => s.id === selectedSpot.id);
 
   const closeSpot = () => {
@@ -133,13 +148,14 @@ export default function SunsetScreen() {
           <SpotMap
             from={{ lat: latitude, lon: longitude }}
             sunsetBearing={info.bearing}
-            spots={ranked ?? []}
+            spots={mapSpots}
             layers={map.layers}
             range={range}
             height={Math.round(windowHeight * MAP_SHARE)}
             top={insets.top + HUD_SPACE}
             selectedId={selectedSpotId}
             onSelectSpot={(spot) => setSelectedSpotId(spot.id)}
+            onLongPressPoint={(point) => setToSave({ point, subtitle: 'הנקודה שבחרת על המפה' })}
           />
 
           {/* Sculpted Deep-Espresso Sunset HUD */}
@@ -187,6 +203,7 @@ export default function SunsetScreen() {
 
           {/* Compass FAB positioned cleanly above the rising sheet curve */}
           <View style={styles.fab}>
+            <MySpotsButton onPress={() => setMineOpen(true)} />
             <CompassButton onPress={() => setCompassOpen(true)} />
           </View>
         </View>
@@ -212,9 +229,11 @@ export default function SunsetScreen() {
           {state.status === 'fallback' && (
             <View style={styles.noticeCompact}>
               <Text style={[styles.noticeText, styles.noticeCompactText]}>
-                {state.reason === 'denied'
-                  ? 'אין הרשאת מיקום · מוצגת תל אביב'
-                  : 'לא נמצא מיקום · מוצגת תל אביב'}
+                {state.reason === 'stale'
+                  ? 'המיקום לא עודכן · מוצג המיקום האחרון'
+                  : state.reason === 'denied'
+                    ? 'אין הרשאת מיקום · מוצגת תל אביב'
+                    : 'לא נמצא מיקום · מוצגת תל אביב'}
               </Text>
               <Pressable onPress={retry} style={styles.compactBtn} accessibilityRole="button">
                 <Text style={styles.compactBtnText}>נסה שוב</Text>
@@ -222,14 +241,16 @@ export default function SunsetScreen() {
             </View>
           )}
 
-          <TwilightCard
-            now={now}
-            goldenHour={info.goldenHour}
-            sunset={info.sunset}
-            blueHour={info.blueHour}
-            blueHourEnd={info.blueHourEnd}
-            isTomorrow={info.isTomorrow}
-          />
+          {light && (
+            <TwilightCard
+              now={now}
+              goldenHour={light.goldenHour}
+              sunset={light.sunset}
+              blueHour={light.blueHour}
+              blueHourEnd={light.blueHourEnd}
+              isTomorrow={light.isTomorrow}
+            />
+          )}
 
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
@@ -282,17 +303,6 @@ export default function SunsetScreen() {
               />
             )}
 
-            {spots.state.status === 'ready' && (
-              <Pressable
-                onPress={() => setAddOpen(true)}
-                style={({ pressed }) => [styles.addCard, pressed && { opacity: 0.8 }]}
-                accessibilityRole="button"
-              >
-                <Text style={styles.addTitle}>★ לשמור את המקום הזה</Text>
-                <Text style={styles.addBody}>מקום טוב לשקיעה שלא מופיע פה? שומרים את המיקום הנוכחי בלחיצה.</Text>
-              </Pressable>
-            )}
-
             {spots.state.status === 'ready' && horizons.status === 'idle' && (
               <Text style={styles.soon}>בודק את קו האופק לכיוון השקיעה…</Text>
             )}
@@ -314,14 +324,39 @@ export default function SunsetScreen() {
         onClose={() => setCompassOpen(false)}
       />
 
+      <MySpotsSheet
+        visible={mineOpen}
+        from={{ lat: latitude, lon: longitude }}
+        canSaveHere={!!here}
+        spots={mySpots.spots}
+        visits={unsavedVisits(visits.visits, mySpots.spots)}
+        onSaveHere={() => {
+          if (!here) return;
+          setMineOpen(false);
+          setToSave({ point: here, subtitle: 'המיקום שלך עכשיו' });
+        }}
+        onSaveVisit={(v) => {
+          setMineOpen(false);
+          setToSave({ point: v, subtitle: `השקיעה מ־${formatDay(v.at)}` });
+        }}
+        onOpenSpot={(id) => {
+          setMineOpen(false);
+          // iOS can't present a modal while another is still sliding away.
+          setTimeout(() => setSelectedSpotId(id), 400);
+        }}
+        onClearVisits={visits.clear}
+        onClose={() => setMineOpen(false)}
+      />
+
       <AddSpotSheet
-        visible={addOpen}
-        canSave={state.status === 'ready'}
-        onClose={() => setAddOpen(false)}
+        visible={!!toSave}
+        subtitle={toSave?.subtitle ?? ''}
+        onClose={() => setToSave(null)}
         onSave={(name) => {
-          const saved = mySpots.add(name, latitude, longitude);
-          setAddOpen(false);
-          setSelectedSpotId(saved.id);
+          if (!toSave) return;
+          const saved = mySpots.add(name, toSave.point.lat, toSave.point.lon);
+          setToSave(null);
+          setTimeout(() => setSelectedSpotId(saved.id), 400);
         }}
       />
 
@@ -430,7 +465,7 @@ const styles = StyleSheet.create({
   },
   hudMeta: { fontFamily: fonts.medium, fontSize: 12, color: '#D8C2AE' },
   hudPhase: { fontFamily: fonts.semibold, fontSize: 11.5 },
-  fab: { position: 'absolute', left: 14, bottom: 38 },
+  fab: { position: 'absolute', left: 14, bottom: 38, gap: 10 },
   sheet: {
     marginTop: -24,
     paddingTop: 10,
@@ -517,18 +552,6 @@ const styles = StyleSheet.create({
   button: { minHeight: 42, paddingHorizontal: 16, justifyContent: 'center', backgroundColor: colors.obsidian, borderRadius: 12 },
   buttonText: { fontFamily: fonts.semibold, fontSize: 14, color: '#FFF7ED' },
   muted: { fontFamily: fonts.regular, fontSize: 14.5, color: colors.muted, textAlign: 'center' },
-  addCard: {
-    padding: 14,
-    gap: 4,
-    borderRadius: 18,
-    borderWidth: 1.5,
-    borderStyle: 'dashed',
-    borderColor: colors.lineStrong,
-    backgroundColor: colors.sandSoft,
-    alignItems: 'flex-end',
-  },
-  addTitle: { fontFamily: fonts.semibold, fontSize: 15, color: colors.ink, textAlign: 'right' },
-  addBody: { fontFamily: fonts.regular, fontSize: 13, color: colors.muted, textAlign: 'right' },
   soon: { fontFamily: fonts.regular, fontSize: 12.5, color: colors.muted, textAlign: 'center' },
   attribution: { fontFamily: fonts.regular, fontSize: 11, color: colors.mutedSoft, textAlign: 'center', paddingTop: 4 },
 });
