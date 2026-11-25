@@ -5,17 +5,11 @@ description: The Spotlight manager playbook - plan, route each task to the best 
 
 # /sprint - manager loop for the Spotlight team
 
-You are the manager. The whole point of the role is to put every task on the model that does it best, then guarantee quality. Start by reading `project/TEAM.md`, `project/MODELS.md` and `project/LESSONS.md`.
+You are the manager. The whole point of the role is to put every task on the model that does it best, then guarantee quality. Start by reading `project/TEAM.md` (current state only; history is in `project/archive/`) and `project/MODELS.md`. Read `project/LESSONS.md` only at retro time - its rules are already folded into this skill and the spec template.
 
 ## 1. Plan - with the routing gate
 - Choose tasks: highest user value first; respect the user's decisions; group by files so parallel tasks never touch the same file (same file -> sequential). Max ~4 workers at once.
-- **Routing gate (mandatory, never skip).** For EVERY task write a row: task | owner | provider + model + effort | why. Two decisions per task: (1) which PROVIDER is best (below), (2) which TIER inside it (see the tier table in MODELS.md: Fable 5.2 is NOT in the user's plan (needs paid usage credits) - never route to it without the user's explicit OK; QUALITY FIRST (user's rule): route by quality; take a cheaper tier only where the scorecard proves equal quality (0 fix rounds), never just because it is cheaper. Follow the table '## ניתוב סופי: איכות קודם' in MODELS.md: Opus 5.5 (xhigh sensitive, high features/UI, medium tests) does nearly all code; Haiku only for text/docs/mechanical; cross-family review (Gemini Carbon if Claude wrote; Codex terra in addition); math checks by Opus xhigh or Gemini Neon, not Grok; Grok for web/X retrieval; Haiku 5.5 (`high`) for bounded tasks: docs, tests-only, small focused fixes; Gemini Orchestrator is not used (executor is always Hydrogen); same idea for Codex luna/terra and Gemini flash/argon). Never default every worker to the same model. Pass it with `--model <id> --effort <level>`. Ask:
-  - Needs an image or visual asset? -> **Gemini** (Antigravity, worktree `team-gemini`).
-  - Needs fresh facts from the web (names, trademarks, terms, store rules, competitors)? -> **Gemini** (Google-grounded). Social/X sentiment -> **Grok**.
-  - Changes a formula, scoring, physics or math? -> Claude implements, **Grok verifies** (`grok -p "<formula + cases>" -m grok-4.7 --effort high`).
-  - Touches security, privacy, storage, untrusted input, service worker or deploy? -> Claude implements, **Codex reviews the diff** (`git diff ... | codex exec -m gpt-5.6-terra -c model_reasoning_effort=high --skip-git-repo-check -`).
-  - A "user decision" blocked on missing options? -> produce the options first (Gemini/research), then ask.
-  - Code, tests, Hebrew copy, UI -> the Claude role agent.
+- **Routing gate (mandatory, never skip).** For EVERY task write a row: task | owner | provider + model + effort | why. The ONLY source is the table `## הניתוב` in `project/MODELS.md` (quality first; one cross-family reviewer per sensitive diff, no duplicate reviews; Fable only with the user's explicit OK). Never default every worker to the same model. Pass `--model <id> --effort <level>`. Quick checks per task: needs an image? Google/X facts? a formula? a sensitive diff (security, privacy, storage, untrusted input, service worker, deploy)? -> the matching row. A "user decision" blocked on missing options -> produce the options first, then ask.
 - Also scan the backlog and open decisions for anything an external model can unblock now, and start it in the same wave.
 - Write the routing table into the sprint section of TEAM.md and show it to the user.
 

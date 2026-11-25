@@ -1,83 +1,54 @@
 # חלוקת עבודה בין המודלים
+**מקור אחד לניתוב.** הסקיל `/sprint` מפנה לכאן. ההיסטוריה של ההחלטות נמצאת ב־git וב־`project/research/`. עודכן: 2026-11-25.
 
-## העיקרון: Claude עושה את רוב העבודה
-- **ל־Claude (Opus) יש את התקציב הגדול ביותר.** לכן הוא עושה כמעט הכול: קוד, בדיקות, סקירות, מחקר, ביקורת על צילומי מסך (הוא קורא תמונות) וטקסטים.
-- **מודל חיצוני נכנס רק כשהוא נותן משהו ש־Claude לא נותן:** יצירת תמונות, דעה שנייה על שינוי מסוכן, או חיפוש שיש רק לו (Google, X).
-- **אם המכסה של מודל חיצוני נגמרת, זה בסדר.** חוזרים ל־Claude ולא מחכים.
-- **כל תשובה חיצונית עוברת דרך המנהל.** היא הצעה, והמנהל מאמת אותה בקוד. לא שולחים מפתחות או מידע אישי.
+## עקרונות
+1. **איכות קודם** (כלל של המשתמש/ת). דרגה זולה מקבלים רק כשכרטיס הניקוד (`ROUTING-SCORECARD.md`) מראה 0 סבבי תיקון לאותו סוג משימה.
+2. **Opus עושה כמעט הכול.** מודל חיצוני נכנס רק כשהוא מוסיף משהו: משפחה אחרת שסוקרת, Google או X, או תמונות.
+3. **אין כפילות.** סוקר חיצוני אחד לכל diff רגיש. diff קטן ולא רגיש: המנהל ובדיקות בלבד. כל ממצא חיצוני הוא הצעה שהמנהל מאמת בקוד.
+4. **מכסה חיצונית נגמרה? עוברים לגיבוי בטבלה** ולא מחכים. לא שולחים מפתחות או מידע אישי.
 
-עודכן: 2026-11-24, לפי מחקר רשת ובדיקה בפועל במחשב הזה.
-
-## מה זמין בפועל (נבדק 2026-11-24)
-| כלי | מה יש | מצב |
+## כסף או טוקנים (נבדק 2026-11-25)
+הכול רץ על **מנויים**, ואין חיוב לפי שימוש. ה־$ ב־`usage.py` הוא מחיר רשימה, וזה מדד יחסי לכמה מהמכסה נשרף, לא חשבון.
+| ספק | איך מחובר | מה קורה כשנגמר |
 |---|---|---|
-| **Claude Code** | Opus 5.5 (המנהל), ובסוכנים גם Sonnet, Haiku ו־Fable | ✅ הכלי הראשי |
-| **Antigravity** (`agy`) | **מחובר לחשבון Google בתשלום** (מאז 2026-11-25 האפליקציה ו־Orca על אותו חשבון: Argon, Neon, Carbon ו־Claude 5.5 זמינים). Gemini 4 (Argon, Neon, Carbon, Hydrogen), Gemini 3.8 Flash, יצירת תמונות (Nano Banana 2), וגם Claude Opus/Sonnet 5.5 על התקציב של Google | ✅ זה הערוץ ל־Gemini. התמונות החזירו 503 ("אין קיבולת") ב־2026-11-24, כלומר עומס זמני ולא חסימה |
-| **Gemini CLI** | **הופסק למשתמשים פרטיים** (2026-11-25: "This client is no longer supported for Gemini Code Assist for individuals… migrate to Antigravity"). המפתח החינמי הוסר לבקשת המשתמש/ת | ❌ לא בשימוש. כל עבודת Gemini עוברת דרך Antigravity |
-| **Codex CLI** | `gpt-reserve`, `gpt-6-luna`, `gpt-5.6-terra` (אין GPT-6 Astra) | ✅ |
-| **Grok Build** | `grok-4.7` | ✅ |
+| Claude Code | מנוי (Google Play). Extra usage פעיל, אבל **אין קרדיטים** | נחסמים עד האיפוס. **אם יוטענו קרדיטים, החריגה תעלה כסף אמיתי** |
+| Codex | התחברות עם ChatGPT, בלי מפתח API | מכסת התוכנית |
+| Grok | התחברות לחשבון x.ai, בלי מפתח API | מכסת התוכנית |
+| Gemini (Antigravity) | חשבון Google, תוכנית Individual, מכסה שבועית | נגמרה. מתאפסת בערך ב־2026-12-01 |
 
-## בחירת מודל בתוך כל ספק (חובה: לא כל משימה מקבלת את המודל החזק)
-| ספק | מודל | מתי |
-|---|---|---|
-| Claude | **Fable 5.2** ($8/$40) | ⚠️ **לא כלול בתוכנית** (מאז 2026-11-16 דורש usage credits, ואין בחשבון). לא לנתב אליו בלי אישור מפורש מהמשתמש/ת לשימוש בקרדיטים. **ברירת המחדל לקשה באמת: Opus 5.5 עם xhigh.** השימוש המקורי: רק לקשה באמת: ארכיטקטורה רוחבית (למשל ערכת צבעים לכל האפליקציה), אלגוריתם חדש (החלקת DEM, ניתוב), באג עיקש שלא נפתר בסבב אחד |
-| Claude | **Opus 5.5** ($4/$20) | **החזק מבין הזמינים.** המנהל, קוד רגיש או מורכב (אחסון, פורמטים קפדניים, פרטיות, service worker, ארכיטקטורה רוחבית), ובדיקת תוכניות. ב־AA, Sonnet ב־max נשאר מאחוריו |
-| Claude | **Sonnet 5.5** ($2/$10) | קרוב ל־Opus בקוד שגרתי. **משימות מוגדרות היטב:** פיצ'רים, UI, תיקונים, בדיקות. שימו לב: הוא משתמש בכ־60% יותר טוקנים למשימה, כך שהוא זול רק בכ־20% לכל משימה שהושלמה |
-| Claude | **Haiku 5.5** ($0.10/$0.50) | משימות תחומות: תיעוד, טקסט, בדיקות בלבד, תיקון קטן ממוקד. ב־`high` הוא עקף את Sonnet בברירת המחדל במבחן אחד |
-| Codex | `gpt-5.6-terra` high | סקירה שנייה על diff רגיש |
-| Codex | `gpt-6-luna` | סקירה מהירה וזולה של diff קטן ("guardian review"), למשל על משימה של Haiku. `codex-auto-review` הוא מודל פנימי של Codex לאישורים, ולא בשבילנו. `gpt-reserve` לא מתועד ולא בשימוש |
-| Gemini | **`gemini-4-neon-xhigh/high`** | **הכי חזק בכללי** ב־Gemini 4 (18.11, מדד AA 61, מוביל את Coding Agent Index). עיצוב ו־UI, אבות טיפוס ל־web, פרומפטים לתמונות, ודעה שלישית על קוד |
-| Gemini | **`gemini-4-carbon-high`** | הכי עמוק והכי איטי: מחקר עמוק עם Google (שם וסימן מסחר, תנאים, דרישות חנות) ובעיות קשות מאוד |
-| Gemini | `gemini-4-hydrogen-*` | זול ומהיר לעבודה יומיומית. גיבוי |
-| Gemini | `gemini-4-argon-*` | **הישן והחלש מבין הארבעה** (13.10, מדד 50). רק גיבוי, לא בחירה ראשונה |
-| Gemini | `gemini-3.8-flash-*` | בדיקה מהירה, סיכום, מחקר קצר |
-| Gemini | Nano Banana (סוכן התמונות של Antigravity) | יצירת תמונות. המכסה נפרדת מזו של הטקסט |
-| Antigravity | `gemini-pro-orchestrator(-neon/-argon)` | **לא בשימוש, בכוונה.** סוכן אחד שמתכנן על Neon, Carbon או Argon, ומבצע **תמיד** על Hydrogen. יש באג ידוע (agy 1.5.13): משנמך בדיקות ל־Hydrogen, ו־Neon לא זמין כמבצע. זה סותר את הניתוב המדויק שלנו, והמנהל ממילא מתזמר. שווה לשקול רק לעבודה ארוכה של Gemini בלבד, עם הרבה צעדים |
-| Antigravity | `gpt-oss-120b-medium` | חזק במתמטיקה ובהסקה (AIME 92.5%), חלש בשפות שאינן אנגלית. **גיבוי לאימות נוסחאות** כש־Grok לא זמין. לא לעברית |
-| Antigravity | `claude-opus-5-5-*` / `claude-sonnet-5-5-*` | **גיבוי לתקציב של Claude:** אותו Claude, אבל על המכסה של Google. רק אם המכסה של Claude Code נגמרת |
-| Grok | `grok-4.7` effort high | אימות נוסחה. `--effort xhigh` רק לנוסחה מסובכת |
+**החיסכון הגדול:** שיחת המנהל היא 78% מהשימוש (קריאה חוזרת של ההיסטוריה). לכן: סשן חדש לכל ספרינט, וקריאת קבצים מינימלית (סעיף 1b ב־`/sprint`).
 
-**לפי הנתונים שלנו (usage.py, 2026-11-25):** Sonnet עלה בערך כמו Opus למשימה, כי השתמש ביותר טוקנים. לכן לקוד אמיתי Opus (medium או high), Sonnet רק לסוגים שבהם יש לו 0 סבבים בכרטיס הניקוד, ו־Haiku לכל דבר תחום.
-**תיקון (2026-11-25):** בעדכון הקודם הגזמתי כשקבעתי ש־"Sonnet ברירת המחדל לכל קוד". Opus חזק יותר בכללי, ו־Sonnet זול יותר רק במעט לכל משימה. החלוקה: Opus לרגיש או מורכב, Sonnet למוגדר היטב, Haiku למכני. המקורות: טבלאות Anthropic, Artificial Analysis ובלוגים, שחלוקים בפרטים.
-**רמת מאמץ (effort):** `low` למכני, `medium` לרגיל, `high` לקוד רגיש או מורכב, ו־`xhigh` לקשה באמת.
-**איך:** `orca orchestration worker-start ... --agent claude --model claude-sonnet-5-5 --effort medium`. ל־Gemini: קודם `node .claude/skills/sprint/pick-gemini.mjs <creative|research|code|quick>`.
-**הערה (2026-11-25):** הדירוג מבוסס על מקורות משניים (Artificial Analysis ובלוגים) שחלוקים בפרטים. מעדכנים לפי התוצאות בפועל
-**בדיעבד:** S4 (בדיקות בלבד) ו־R3 (CI ו־README) רצו על Opus. היה נכון להריץ אותם על Sonnet ו־Haiku.
-
-## ניתוב סופי: איכות קודם (2026-11-25)
-**העיקרון של המשתמש/ת:** איכות קודם לכול. דרגה זולה רק כשהוכח שהאיכות שווה (0 סבבי תיקון בכרטיס הניקוד), אף פעם לא רק כי זול יותר.
-**הבסיס:** מחקר של Grok עם מקורות (Terminal-Bench 4.1 הרשמי ו־Artificial Analysis, נשלף ב־25.11), כרטיס הניקוד שלנו ו־`usage.py`. מחקר Carbon יתווסף כשמכסת Gemini תתאפס.
-| סוג משימה | הכי טוב | גיבוי | לא להשתמש |
+## הניתוב
+| סוג משימה | ראשי | גיבוי | לא |
 |---|---|---|---|
-| קוד רגיש או מורכב | **Opus 5.5 xhigh** | Opus high, ו־Gemini Carbon high כשיש מכסה | Haiku, Flash, Grok, Codex כמבצע |
-| פיצ'ר ו־UI מוגדרים | **Opus 5.5 high** (Sonnet לא זול יותר למשימה: $173 מול $108 לכל משימה שנפתרה) | Gemini Carbon high | Haiku, Luna |
-| כתיבת בדיקות | **Opus 5.5 medium** (בדיקות הן רשת הביטחון) | | Haiku |
-| טקסט, תיעוד, שינוי מכני | **Haiku 5.5 medium**, ואחריו שער האיכות וסקירה | Opus low | מודל חזק ב־xhigh |
-| עיצוב ויזואלי ואבות טיפוס | **2 גרסאות:** Opus 5.5 xhigh ו־Gemini Neon xhigh (Neon ניצח אצלנו) | Gemini Carbon | Grok, Haiku |
-| סקירת קוד (דעה שנייה) | **ממשפחה אחרת:** Gemini Carbon high אם Claude כתב, ו־Opus xhigh אם Gemini כתב. **Codex terra בנוסף** (מצא אצלנו באגים אמיתיים, אבל חלש בבנצ'מרק ו־deprecated) | Gemini Neon | אותו מודל שכתב, או Grok כסוקר יחיד |
-| אימות נוסחאות ומתמטיקה | **Opus 5.5 xhigh** עם בדיקות שרצות בפועל, או **Gemini Neon xhigh** | GPT-OSS 120B | **Grok** (מדד 35, זה לא התחום שלו) |
-| מחקר ברשת | **Grok 4.7 high** לשליפה (web ו־X), ו־**Opus** מאמת את המקורות. Carbon למחקר עמוק עם Google | Gemini Flash לבדיקה מהירה | תשובה "מהזיכרון" בלי מקורות |
-| טקסט משפטי (מדיניות פרטיות) | **Opus 5.5 xhigh**, מתוך מקורות ש־Grok שולף. בעל מקצוע מאשר | | Gemini לטקסט שאסור לו להמציא חובות |
+| קוד רגיש או מורכב (אחסון, פרטיות, פורמט קפדני, service worker, ארכיטקטורה) | **Opus 5.5 xhigh** | Opus high | Haiku, Sonnet, Grok, Codex כמבצע |
+| פיצ'ר ו־UI מוגדרים | **Opus 5.5 high** (Sonnet יוצא יקר יותר לכל משימה שנפתרה) | Gemini Carbon high, כשיש מכסה | Haiku, Luna |
+| בדיקות בלבד | **Opus 5.5 medium** | | Haiku |
+| טקסט, תיעוד, שינוי מכני | **Haiku 5.5 medium**, עם הגדרת "סיום" חד־משמעית | Opus low | xhigh |
+| עיצוב ויזואלי ואבות טיפוס | **2 גרסאות:** Opus xhigh וגם Gemini Neon xhigh (Neon ניצח אצלנו) | בלי מכסת Gemini: גרסה אחת של Opus עם הסקיל `frontend-design` | Grok, Haiku |
+| סקירת diff רגיש | **Codex terra high** (6 מתוך 9 ממצאים היו אמיתיים) | Gemini Carbon. Opus xhigh אם Gemini כתב את הקוד | המודל שכתב, או סוקר שני "ליתר ביטחון" |
+| נוסחה ומתמטיקה | **Opus xhigh מיישם, עם בדיקות שרצות.** אימות נפרד: Gemini Neon | **Grok 4.7 high** (2 מתוך 2 נכונים אצלנו) | Grok כמאמת יחיד, בלי בדיקות |
+| מחקר ברשת | **Grok 4.7 high** שולף (web ו־X), **Opus** מאמת מקורות | Gemini Carbon למחקר עמוק עם Google, ו־Flash לבדיקה מהירה | תשובה מהזיכרון בלי מקורות |
+| טקסט משפטי | **Opus xhigh**, ממקורות ש־Grok שולף. בעל מקצוע מאשר | | Gemini |
 | עברית בממשק | **Opus 5.5** | | GPT-OSS, Luna |
-| תמונות | **Nano Banana 2.1** | Nano Banana 2 | מודל טקסט |
-| תזמור | **Opus 5.5** (המנהל) | | `gemini-pro-orchestrator` (המבצע תמיד Hydrogen) |
-| גיבוי למכסה | Claude 5.5 דרך Antigravity, או Sonnet 5.5 | | |
+| תמונות | **Nano Banana** (Antigravity) | Canva, או המשתמש/ת באפליקציית Gemini מפרומפט שהמנהל כותב | מודל טקסט |
+| תזמור | **Opus 5.5** (המנהל) | | Gemini Orchestrator (המבצע תמיד Hydrogen) |
+| Claude Code הגיע למכסה | Claude 5.5 דרך Antigravity | | Fable (לא בתוכנית, רק באישור מפורש) |
 
-## מתי כן מפעילים מודל חיצוני
-| צורך | מודל | הפקודה |
-|---|---|---|
-| **תמונות** (אייקון, מסך פתיחה, איורים, חנות) | Gemini דרך Antigravity | `agy -p "<prompt>" --model gemini-3.8-flash-low --mode accept-edits --print-timeout 0`. התמונה נשמרת בתיקיית ה־artifacts של agy (`~/.gemini/antigravity-cli/brain/<id>/`), משם המנהל מעתיק |
-| **דעה שנייה על שינוי מסוכן** (מיקום, פרטיות, service worker, פריסה, נתונים) | Codex | `git diff \| codex exec -m gpt-5.6-terra -c model_reasoning_effort=high --skip-git-repo-check -` (הוא לא מריץ פקודות כאן, לכן ב־stdin) |
-| **אימות שינוי בנוסחה** (שמש, אופק, דירוג) | Grok | `grok -p "<prompt>" -m grok-4.7 --effort high` |
-| **מחקר שצריך Google** (שם, סימן מסחרי, Play, תנאי API) | Gemini 4 דרך Antigravity | `agy -p "<prompt>" --model gemini-4-argon-medium --print-timeout 0` |
-| **מה אומרים ב־X וטרנדים** | Grok | `grok -p "<prompt>"` |
-| **Claude נגמר בתקציב של Claude Code** | Claude דרך Antigravity | `agy -p "<prompt>" --model claude-sonnet-5-5-medium` |
+**שלב תוכנית** רק למשימות M/L או רגישות. **רמות מאמץ:** low למכני, medium לרגיל, high לרגיש, xhigh לקשה באמת.
 
-**לא מפעילים חיצוני על:** שינויים קטנים, תיקונים פשוטים, בדיקות, עיצוב (Grok חלש בפרונטאנד) וטקסט בעברית. את כל אלה עושה Claude.
+## זמינות
+- **Claude:** Opus, Sonnet ו־Haiku 5.5. Fable 5.2 לא כלול בתוכנית מאז 16.11.
+- **Gemini דרך Antigravity בלבד** (`agy`). ה־Gemini CLI הופסק למשתמשים פרטיים. הזמינות משתנה (ב־25.11 נשארו רק Hydrogen ו־Flash), ולכן **תמיד** מריצים קודם `node .claude/skills/sprint/pick-gemini.mjs <creative|research|code|math|quick> --probe`. אם יוצא `fallback: true`, אומרים למשתמש/ת לפני השליחה.
+- **Codex:** `gpt-5.6-terra` לסקירה. `gpt-6-luna` לסקירה מהירה של diff קטן. `gpt-reserve` לא בשימוש.
+- **Grok:** `grok-4.7`.
 
-## מה המחקר אומר (בקצרה)
-- **Claude Opus 5.5:** הכי חזק בקוד ובעבודה אגנטית (Terminal-Bench 4.0, כ־66%, לפי היצרן).
-- **Gemini 4 Argon:** בערך 57% באותו מבחן. חלון של מיליון טוקנים, מולטימודלי, חיפוש Google ותמונות.
-- **Grok 4.7:** טוב ביחס למחיר, טוב בחישוב, ב־backend ובטקסט משפטי. חלש בפרונטאנד, ולפעמים נתקע בלולאות.
-- **Codex (הדגמים בתוכנית):** חלשים כסוכן קוד, אבל מועילים כסוקר ממודל אחר.
-- **הסתייגות:** רוב המספרים הם של היצרנים או של בלוגים, ויש ביניהם סתירות.
+## פקודות
+| מה | פקודה |
+|---|---|
+| עובד Claude | `orca orchestration worker-start ... --agent claude --model claude-opus-5-5 --effort high` |
+| עובד Gemini | `--worktree name:team-gemini --agent antigravity --model <pick>` |
+| סקירת Codex (ברקע, לקובץ) | `git diff ... \| codex exec -m gpt-5.6-terra -c model_reasoning_effort=high --skip-git-repo-check -` (הוא לא מריץ פקודות כאן, ולכן ה־diff ב־stdin) |
+| Grok, נימוק בלבד (ברקע, לקובץ) | `grok -p "<code + cases> Answer from reasoning only, do NOT run tools" -m grok-4.7 --effort high` |
+| Grok עם רשת | להוסיף `--allow Fetch --allow WebSearch --deny Bash --deny Edit --deny Write` |
+| תמונה | `agy -p "<prompt>" --model <pick> --mode accept-edits --print-timeout 0`. הקובץ נשמר ב־`~/.gemini/antigravity-cli/brain/<id>/` |
