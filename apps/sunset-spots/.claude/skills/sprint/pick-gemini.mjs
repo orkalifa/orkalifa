@@ -3,7 +3,7 @@
 // Why: when Orca starts an Antigravity worker with a model the account doesn't have (2026-11-25: Argon),
 // agy silently falls back to another model in interactive mode. Asking agy first avoids that.
 //
-// Usage: node pick-gemini.mjs <creative|research|code|math|quick>
+// Usage: node pick-gemini.mjs <creative|research|deep|code|math|quick> [--probe]
 // Prints JSON: { pick, preferred, fallback, available } - pass `pick` to
 //   orca orchestration worker-start ... --agent antigravity --model <pick>
 // If `fallback` is true, the preferred model is missing: tell the user which one ran instead.
@@ -13,16 +13,20 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 
 const PREFERENCES = {
-  // Visual/UI design, creative web prototypes, image prompts. Neon = strongest all-round Gemini 4 (Nov 18).
-  creative: ['gemini-4-neon-xhigh', 'gemini-4-neon-high', 'gemini-4-carbon-high', 'gemini-4-hydrogen-xhigh', 'gemini-4-argon-high', 'gemini-3.8-flash-high'],
-  // Deep, Google-grounded research (names, trademarks, terms, store rules). Carbon = slowest, deepest.
-  research: ['gemini-4-carbon-high', 'gemini-4-neon-high', 'gemini-4-neon-medium', 'gemini-4-hydrogen-high', 'gemini-4-argon-medium', 'gemini-3.8-flash-high'],
+  // Order follows project/MODELS.md (2026-11-25, Grok + Carbon research). Argon, Flash-first, Orchestrator are
+  // dropped on purpose: Argon is dominated by Neon, Flash hallucinates ~55%, Carbon has no xhigh (HTTP 400).
+  // Visual/UI design and prototypes: Neon won our own twilight-card test.
+  creative: ['gemini-4-neon-xhigh', 'gemini-4-neon-high', 'gemini-4-carbon-high', 'gemini-4-hydrogen-xhigh'],
+  // Google-grounded lookups (docs, SDKs, store rules, terms): Neon has the lowest hallucination rate.
+  research: ['gemini-4-neon-high', 'gemini-4-carbon-high', 'gemini-4-hydrogen-high', 'gemini-4-hydrogen-xhigh'],
+  // Deep multi-source research (names, trademarks): Carbon is slowest and deepest.
+  deep: ['gemini-4-carbon-high', 'gemini-4-neon-xhigh', 'gemini-4-neon-high'],
   // Math/formula verification (with code execution).
-  math: ['gemini-4-neon-xhigh', 'gemini-4-neon-high', 'gemini-4-carbon-high'],
-  // Code work or a cross-family code review (Neon tops the coding-agent index among Gemini 4).
-  code: ['gemini-4-carbon-high', 'gemini-4-neon-high', 'gemini-4-hydrogen-high', 'gemini-4-argon-high'],
-  // Short lookups and summaries: fast and cheap.
-  quick: ['gemini-3.8-flash-medium', 'gemini-3.8-flash-high', 'gemini-4-hydrogen-low', 'gemini-4-hydrogen-medium'],
+  math: ['gemini-4-neon-xhigh', 'gemini-4-carbon-high', 'gemini-4-neon-high'],
+  // Code work or a cross-family code review.
+  code: ['gemini-4-carbon-high', 'gemini-4-neon-xhigh', 'gemini-4-neon-high', 'gemini-4-hydrogen-high'],
+  // Mechanical edits, short summaries: Hydrogen replaces Flash (never Hydrogen low).
+  quick: ['gemini-4-hydrogen-high', 'gemini-4-hydrogen-medium', 'gemini-3.8-flash-high'],
 };
 
 function agyPath() {
