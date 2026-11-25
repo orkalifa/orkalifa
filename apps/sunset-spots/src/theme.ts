@@ -39,6 +39,49 @@ export const fonts = {
   bold: 'Rubik_700Bold',
 };
 
+/*
+ * The reference language (spacefs.com, project/DESIGN-REFS.md), warmed to our palette. TOKENS ONLY:
+ * the screens adopt them in U11b. No react-native import here (tests load this file under plain node),
+ * so a hairline's width is `StyleSheet.hairlineWidth` at the call site, with these colours.
+ */
+
+/** Two-tone title: a near-black first line, a gray second line (#0E0F12 / #686D78 in the reference). */
+export const title = {
+  /** First line on light surfaces. */
+  ink: '#1A120E',
+  /** Second line on light surfaces: >= 4.5:1 on ground, sheet, sand and surface (tests/theme.test.ts). */
+  soft: '#6E5A4E',
+  /** First line on the dark HUD (obsidian). */
+  nightInk: '#FFF6EA',
+  /** Second line on the dark HUD. */
+  nightSoft: '#E8CDB8',
+};
+
+/** Thin dividers. Width: StyleSheet.hairlineWidth. */
+export const hairline = {
+  color: 'rgba(33, 21, 15, 0.12)',
+  onDark: 'rgba(255, 236, 214, 0.16)',
+};
+
+/** Floating round button: white, very soft shadow, 44 px touch target. */
+export const floating = {
+  size: 44,
+  radius: 22,
+  bg: '#FFFFFF',
+  /** RN 0.88 `boxShadow`: the same shadow on web and Android. */
+  boxShadow: '0 4px 14px rgba(33, 21, 15, 0.08)',
+};
+
+/** The one strong action: a black pill with white text. */
+export const pill = {
+  bg: '#1A120E',
+  text: '#FFFFFF',
+  radius: 999,
+  minHeight: 44,
+  paddingH: 20,
+  font: fonts.semibold,
+};
+
 export type SkyPhase = {
   id: 'afternoon' | 'golden' | 'imminent' | 'twilight';
   label: string;
