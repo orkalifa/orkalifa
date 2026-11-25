@@ -18,6 +18,7 @@ You are the manager. The whole point of the role is to put every task on the mod
 - Run the literature part on other providers' budgets (Gemini Carbon, Grok with web access: `--allow Fetch --allow WebSearch --deny Bash --deny Edit --deny Write`), two independent sources, then reconcile them yourself.
 - Re-run when: a new model id appears in `pick-gemini.mjs` `available`, a scorecard row shows 2+ fix rounds for a task type, or a month has passed.
 - Budget the Gemini weekly quota (Individual plan): Neon/Carbon only where they add something (design, deep research); avoid xhigh unless it matters.
+- **Checkpoint for the 2026-11-25 table (agreed with the user):** once ~10 tasks have run under it (scorecard section "טבלה 25.11"), review it without being asked: fix rounds per task type, real vs false reviewer findings, `usage.py` cost per finished task, fallbacks/account flips. Show the user what to keep, change or drop.
 - After every task, add one scorecard row (model, fix rounds, reviewer findings) - free, and the best data we have.
 
 ## 1b. Usage discipline (tokens are limited) - measured, not guessed
