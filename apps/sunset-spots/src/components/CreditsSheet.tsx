@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { SheetModal } from './SheetModal';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   CREDIT_ITEMS,
@@ -15,7 +16,7 @@ import { ExternalLink } from './ExternalLink';
 /** Plain-language credits and licences, opened from the footer. */
 export function CreditsSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   return (
-    <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
+    <SheetModal visible={visible} animationType="slide" onRequestClose={onClose}>
       <SafeAreaView style={styles.screen}>
         <View style={styles.header}>
           <Text style={styles.title} accessibilityRole="header">
@@ -37,7 +38,7 @@ export function CreditsSheet({ visible, onClose }: { visible: boolean; onClose: 
           ))}
         </ScrollView>
       </SafeAreaView>
-    </Modal>
+    </SheetModal>
   );
 }
 

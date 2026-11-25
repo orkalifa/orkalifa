@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { SheetModal } from './SheetModal';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { addToCalendar, webEnv } from '../lib/addToCalendar';
@@ -91,7 +92,7 @@ export function ReminderSheet({ visible, lat, lon, onClose }: Props) {
   };
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+    <SheetModal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <View style={styles.backdrop}>
         <Pressable style={styles.scrim} onPress={onClose} accessibilityLabel="סגירה" />
         <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 16) + 8 }]}>
@@ -141,7 +142,7 @@ export function ReminderSheet({ visible, lat, lon, onClose }: Props) {
           </ScrollView>
         </View>
       </View>
-    </Modal>
+    </SheetModal>
   );
 }
 

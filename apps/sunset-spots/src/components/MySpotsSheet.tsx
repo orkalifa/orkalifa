@@ -1,4 +1,5 @@
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { SheetModal } from './SheetModal';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import { distanceMeters, formatDistance, type LatLon } from '../lib/geo';
@@ -28,7 +29,7 @@ export function MySpotsSheet({ visible, from, canSaveHere, spots, visits, onSave
   const nearestFirst = [...spots].sort((a, b) => distanceMeters(from, a) - distanceMeters(from, b));
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+    <SheetModal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <View style={styles.backdrop}>
         <Pressable style={styles.scrim} onPress={onClose} accessibilityLabel="סגירה" />
         <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 16) + 8 }]}>
@@ -84,7 +85,7 @@ export function MySpotsSheet({ visible, from, canSaveHere, spots, visits, onSave
           </ScrollView>
         </View>
       </View>
-    </Modal>
+    </SheetModal>
   );
 }
 
