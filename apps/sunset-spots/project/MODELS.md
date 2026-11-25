@@ -26,7 +26,7 @@
 | בדיקות בלבד | **Opus 5.5 medium** | | Haiku |
 | טקסט, תיעוד, שינוי מכני | **Haiku 5.5 medium**, עם הגדרת "סיום" חד־משמעית | Opus low | xhigh |
 | עיצוב ויזואלי ואבות טיפוס | **2 גרסאות:** Opus xhigh וגם Gemini Neon xhigh (Neon ניצח אצלנו) | בלי מכסת Gemini: גרסה אחת של Opus עם הסקיל `frontend-design` | Grok, Haiku |
-| סקירת diff רגיש | **Codex terra high** (6 מתוך 9 ממצאים היו אמיתיים) | Gemini Carbon. Opus xhigh אם Gemini כתב את הקוד | המודל שכתב, או סוקר שני "ליתר ביטחון" |
+| סקירת diff רגיש | **Codex terra high** (6 מתוך 9 ממצאים היו אמיתיים) | Gemini Carbon. Opus xhigh אם Gemini כתב את הקוד. אם גם Codex וגם Gemini לא זמינים: Opus xhigh בסשן נפרד, בלי ההקשר של מי שכתב | המודל שכתב, או סוקר שני "ליתר ביטחון" |
 | נוסחה ומתמטיקה | **Opus xhigh מיישם, עם בדיקות שרצות.** אימות נפרד: Gemini Neon | **Grok 4.7 high** (2 מתוך 2 נכונים אצלנו) | Grok כמאמת יחיד, בלי בדיקות |
 | מחקר ברשת | **Grok 4.7 high** שולף (web ו־X), **Opus** מאמת מקורות | Gemini Carbon למחקר עמוק עם Google, ו־Flash לבדיקה מהירה | תשובה מהזיכרון בלי מקורות |
 | טקסט משפטי | **Opus xhigh**, ממקורות ש־Grok שולף. בעל מקצוע מאשר | | Gemini |
