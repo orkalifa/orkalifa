@@ -49,7 +49,7 @@ You are the manager. The whole point of the role is to put every task on the mod
 - Trial-merge all branches into `integ/sprint<N>` in a temp worktree (junction node_modules from the main app), run tests/typecheck/lint, `EXPO_OFFLINE=1 CI=1 npm run build:web`, and a local smoke (`scripts/smoke-live.mjs` against a small static server on /orkalifa/).
 - Summarize for the user: task -> what changed for the user, plus what the reviews caught. Ask to merge/push.
 - After the push, watch the GitHub run (build, deploy, smoke) in the background and report.
-- Clean up: remove the junction first, then the temp worktree (long-path safe: PowerShell `Remove-Item -LiteralPath "\\?\<path>"`), delete the integ branch.
+- Clean up: remove the junction first with `cmd /c rmdir <junction>` (never Remove-Item: it prompts in non-interactive PowerShell), then the temp worktree (long-path safe: PowerShell `Remove-Item -LiteralPath "\\?\<path>"`), delete the integ branch.
 
 ## 5. Retro (always)
 - 3-5 lines in `project/LESSONS.md`: what worked, what cost a round trip and why, which rule changes.
