@@ -10,6 +10,7 @@ import { copyFile, readdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import Jimp from 'jimp-compact';
 import { contentVersion } from './sw-version.mjs';
+import { manifestIcons } from './make-icons.mjs';
 
 const DIST = path.resolve('dist');
 const app = JSON.parse(await readFile('app.json', 'utf8')).expo;
@@ -25,6 +26,12 @@ for (const size of [192, 512, 180]) {
   const name = size === 180 ? 'apple-touch-icon.png' : `icon-${size}.png`;
   await icon.clone().resize(size, size).writeAsync(path.join(DIST, name));
 }
+// Maskable icons (motif inside the 40% safe circle), so Android can crop them to any shape (assets/icon-maskable.png,
+// made by scripts/make-icons.mjs).
+const maskable = await Jimp.read('assets/icon-maskable.png');
+for (const size of [192, 512]) {
+  await maskable.clone().resize(size, size).writeAsync(path.join(DIST, `icon-maskable-${size}.png`));
+}
 
 // 2. Manifest.
 const manifest = {
@@ -39,10 +46,7 @@ const manifest = {
   orientation: 'portrait',
   background_color: BACKGROUND,
   theme_color: THEME,
-  icons: [
-    { src: `${BASE}icon-192.png`, sizes: '192x192', type: 'image/png', purpose: 'any' },
-    { src: `${BASE}icon-512.png`, sizes: '512x512', type: 'image/png', purpose: 'any' },
-  ],
+  icons: manifestIcons(BASE),
 };
 await writeFile(path.join(DIST, 'manifest.webmanifest'), JSON.stringify(manifest, null, 2));
 
