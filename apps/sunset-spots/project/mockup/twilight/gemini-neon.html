@@ -1,0 +1,992 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Spotlight — כרטיס השקיעה (Gemini Neon)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    /*
+      Spotlight Twilight Card — "Sunlit Horizon Window"
+      Warm Mediterranean sunset horizon from Spotlight's Sunlit Atlas palette:
+      - Open sunset sky above gives generous room for a hero-scale, crafted sun
+        with tapered rays, layered warm clouds, and a delicate fluttery aura.
+      - The horizon waterline IS the timeline (right 16:00 -> sunset 16:37 -> left 17:03).
+      - Anchored editorial typography sits in the calm evening water plane below,
+        with two-tone weight contrast (sunlit bold start -> hushed light darkness).
+    */
+    :root {
+      --ground: #F5EDE3;
+      --sheet: #FCF8F2;
+      --sand: #F5E5D2;
+      --sandSoft: #FBF3E8;
+      --peach: #F4BE94;
+      --orange: #E55B24;
+      --orangeSoft: #FBE6DA;
+      --orangeText: #B54215;
+      --gold: #F2A92C;
+      --goldSoft: #FDF2D6;
+      --goldText: #9A6307;
+      --ink: #21150F;
+      --inkSoft: #4E3527;
+      --muted: #7B5C4B;
+      --line: #EAE0D3;
+      --obsidian: #1A120E;
+      --ease: cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      min-height: 100vh;
+      background: var(--ground);
+      color: var(--ink);
+      font-family: 'Rubik', system-ui, -apple-system, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px 0 36px;
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+    }
+
+    /* 390px phone sheet frame echoing Spotlight's live bottom sheet */
+    .phone-frame {
+      width: 390px;
+      max-width: 100vw;
+      background: var(--sheet);
+      border-radius: 30px;
+      padding: 12px 16px 20px;
+      border: 1px solid var(--line);
+      box-shadow:
+        0 24px 54px -22px rgba(33, 21, 15, 0.16),
+        0 2px 8px rgba(33, 21, 15, 0.04);
+    }
+
+    .sheet-handle {
+      width: 36px;
+      height: 4px;
+      border-radius: 99px;
+      background: #DFD2C3;
+      margin: 0 auto 14px;
+    }
+
+    /* ---------- Twilight Card (358px wide) ---------- */
+    .twilight-card {
+      position: relative;
+      isolation: isolate;
+      width: 100%;
+      max-width: 358px;
+      height: 202px;
+      margin: 0 auto;
+      border-radius: 24px;
+      overflow: hidden;
+      background: #F8D7B8;
+      box-shadow:
+        inset 0 1px 0 rgba(255, 250, 240, 0.72),
+        inset 0 0 0 1px rgba(181, 66, 21, 0.13),
+        0 16px 34px -20px rgba(181, 66, 21, 0.36),
+        0 2px 6px rgba(33, 21, 15, 0.05);
+    }
+
+    .scene-svg {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    /* Fine risograph-like tactile grain (subtle, calm) */
+    .card-grain {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      opacity: 0.24;
+      mix-blend-mode: multiply;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.88' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.45 0 0 0 0 0.27 0 0 0 0 0.16 0 0 0 0.45 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
+    }
+
+    /* Delicate inner glass-like specular lip */
+    .card-rim {
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      pointer-events: none;
+      box-shadow:
+        inset 0 1px 0 rgba(255, 251, 244, 0.65),
+        inset 0 -1px 0 rgba(78, 53, 39, 0.08);
+    }
+
+    /* Exact sunset caption sitting quietly beneath its horizon tick */
+    .sunset-caption {
+      position: absolute;
+      top: 123px;
+      transform: translateX(-50%);
+      display: inline-flex;
+      align-items: baseline;
+      gap: 4px;
+      white-space: nowrap;
+      pointer-events: none;
+      direction: rtl;
+      font-size: 11px;
+      line-height: 1;
+      letter-spacing: -0.01em;
+      color: #6B4230;
+    }
+
+    .sunset-caption strong {
+      font-weight: 600;
+      color: #9E3810;
+      font-variant-numeric: tabular-nums;
+      font-feature-settings: "tnum";
+    }
+
+    /* Anchored endpoint times in the calm lower water band */
+    .anchors {
+      position: absolute;
+      inset-inline: 20px;
+      bottom: 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      pointer-events: none;
+    }
+
+    .anchor {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+
+    .anchor.start {
+      align-items: flex-start;
+      text-align: right;
+    }
+
+    .anchor.dark {
+      align-items: flex-end;
+      text-align: left;
+    }
+
+    .anchor-label {
+      font-size: 11.5px;
+      font-weight: 500;
+      line-height: 1.15;
+      letter-spacing: 0.005em;
+    }
+
+    .anchor-time {
+      font-size: 27px;
+      line-height: 0.98;
+      letter-spacing: -0.03em;
+      font-variant-numeric: tabular-nums;
+      font-feature-settings: "tnum";
+    }
+
+    .anchor.start .anchor-label {
+      color: #844C0C;
+    }
+
+    .anchor.start .anchor-time {
+      color: var(--ink);
+      font-weight: 600;
+    }
+
+    .anchor.dark .anchor-label {
+      color: var(--inkSoft);
+    }
+
+    .anchor.dark .anchor-time {
+      color: #362218;
+      font-weight: 400;
+    }
+
+    /* ---------- Delicate, Fluttery Aura & Shimmer Motion ---------- */
+    .aura-veil,
+    .aura-core,
+    .aura-wisp,
+    .ray-g1,
+    .ray-g2,
+    .ray-g3,
+    .glint,
+    .star {
+      transform-box: fill-box;
+      transform-origin: center;
+    }
+
+    /* Layered whisper-soft halos: organic asymmetric flutter, never a heavy throb */
+    .aura-veil {
+      animation: flutter-veil 5.8s ease-in-out infinite;
+    }
+
+    .aura-core {
+      animation: flutter-core 4.1s ease-in-out -1.3s infinite;
+    }
+
+    .aura-wisp {
+      animation: flutter-wisp 3.3s ease-in-out -0.7s infinite;
+    }
+
+    .ray-g1 {
+      animation: ray-shimmer 3.2s ease-in-out infinite;
+    }
+
+    .ray-g2 {
+      animation: ray-shimmer 3.9s ease-in-out -1.1s infinite;
+    }
+
+    .ray-g3 {
+      animation: ray-shimmer 4.5s ease-in-out -2.4s infinite;
+    }
+
+    .glint {
+      animation: water-glint 3.2s ease-in-out infinite;
+    }
+
+    .star {
+      animation: star-twinkle 4.8s ease-in-out infinite;
+    }
+
+    @keyframes flutter-veil {
+      0%, 100% {
+        transform: scale(0.975);
+        opacity: 0.62;
+      }
+      28% {
+        transform: scale(1.028);
+        opacity: 0.86;
+      }
+      52% {
+        transform: scale(0.992);
+        opacity: 0.70;
+      }
+      76% {
+        transform: scale(1.034);
+        opacity: 0.89;
+      }
+    }
+
+    @keyframes flutter-core {
+      0%, 100% {
+        transform: scale(0.985);
+        opacity: 0.64;
+      }
+      35% {
+        transform: scale(1.022);
+        opacity: 0.86;
+      }
+      64% {
+        transform: scale(0.994);
+        opacity: 0.70;
+      }
+      85% {
+        transform: scale(1.018);
+        opacity: 0.84;
+      }
+    }
+
+    @keyframes flutter-wisp {
+      0%, 100% {
+        transform: scale(0.96);
+        opacity: 0.24;
+      }
+      24% {
+        transform: scale(1.03);
+        opacity: 0.44;
+      }
+      58% {
+        transform: scale(0.985);
+        opacity: 0.28;
+      }
+      81% {
+        transform: scale(1.04);
+        opacity: 0.46;
+      }
+    }
+
+    @keyframes ray-shimmer {
+      0%, 100% {
+        opacity: 0.94;
+        transform: scale(1);
+      }
+      42% {
+        opacity: 0.66;
+        transform: scale(0.985);
+      }
+      74% {
+        opacity: 0.88;
+        transform: scale(1.012);
+      }
+    }
+
+    @keyframes water-glint {
+      0%, 100% {
+        opacity: 0.36;
+        transform: scaleX(0.82);
+      }
+      50% {
+        opacity: 0.92;
+        transform: scaleX(1.02);
+      }
+    }
+
+    @keyframes star-twinkle {
+      0%, 100% {
+        opacity: 0.55;
+      }
+      50% {
+        opacity: 1;
+      }
+    }
+
+    /* ---------- Demo Controls (Outside the Card Design) ---------- */
+    .controls {
+      width: 390px;
+      max-width: 100vw;
+      margin-top: 16px;
+      padding: 0 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .btn-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .btn {
+      font-family: inherit;
+      font-size: 13.5px;
+      font-weight: 500;
+      border-radius: 999px;
+      min-height: 40px;
+      padding: 0 16px;
+      cursor: pointer;
+      border: 1px solid var(--line);
+      background: var(--sheet);
+      color: var(--ink);
+      transition: transform 0.09s var(--ease), opacity 0.18s var(--ease), background-color 0.18s var(--ease);
+    }
+
+    .btn:hover {
+      opacity: 0.92;
+    }
+
+    .btn:active {
+      transform: scale(0.97);
+    }
+
+    .btn.primary {
+      background: var(--obsidian);
+      border-color: var(--obsidian);
+      color: var(--sheet);
+    }
+
+    .btn:disabled {
+      opacity: 0.55;
+      cursor: default;
+    }
+
+    .now-readout {
+      font-size: 12.5px;
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+      font-feature-settings: "tnum";
+    }
+
+    .now-readout strong {
+      color: var(--inkSoft);
+      font-weight: 600;
+    }
+
+    /* Respect reduced-motion strictly */
+    @media (prefers-reduced-motion: reduce) {
+      .aura-veil,
+      .aura-core,
+      .aura-wisp,
+      .ray-g1,
+      .ray-g2,
+      .ray-g3,
+      .glint,
+      .star {
+        animation: none !important;
+      }
+      .btn {
+        transition: none !important;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <main class="phone-frame" aria-label="תצוגת כרטיס השקיעה">
+    <div class="sheet-handle" aria-hidden="true"></div>
+
+    <section class="twilight-card" aria-label="תחילת השקיעה 16:00, שקיעה 16:37, חושך 17:03">
+      <svg class="scene-svg" viewBox="0 0 358 202" aria-hidden="true">
+        <defs>
+          <!-- Warm sunset sky wash: sunlit honey right -> apricot-orange center -> velvety dusk left -->
+          <linearGradient id="skyHoriz" x1="1" y1="0" x2="0" y2="0">
+            <stop offset="0%" stop-color="#FDF0D4" />
+            <stop offset="34%" stop-color="#FCE0BF" />
+            <stop offset="68%" stop-color="#F2BF9A" />
+            <stop offset="100%" stop-color="#D9A389" />
+          </linearGradient>
+
+          <!-- Vertical sky glow: warmer apricot & sunset orange pooling near the horizon -->
+          <linearGradient id="skyVert" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#FCF8F2" stop-opacity="0.34" />
+            <stop offset="48%" stop-color="#F4BE94" stop-opacity="0.18" />
+            <stop offset="84%" stop-color="#E55B24" stop-opacity="0.24" />
+            <stop offset="100%" stop-color="#E55B24" stop-opacity="0.34" />
+          </linearGradient>
+
+          <!-- Dusk deepening veil (driven smoothly by evening progression; stays warm, never cold blue) -->
+          <linearGradient id="duskVeil" x1="0" y1="0" x2="1" y2="0.55">
+            <stop offset="0%" stop-color="#3A241B" stop-opacity="0.56" />
+            <stop offset="46%" stop-color="#6B3724" stop-opacity="0.34" />
+            <stop offset="82%" stop-color="#B54215" stop-opacity="0.18" />
+            <stop offset="100%" stop-color="#E55B24" stop-opacity="0.08" />
+          </linearGradient>
+
+          <!-- Dynamic sky radiance following the sun -->
+          <radialGradient id="sunSkyBloom" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stop-color="#FFF8E2" stop-opacity="0.62" />
+            <stop offset="38%" stop-color="#F7C259" stop-opacity="0.30" />
+            <stop offset="72%" stop-color="#E55B24" stop-opacity="0.11" />
+            <stop offset="100%" stop-color="#E55B24" stop-opacity="0" />
+          </radialGradient>
+
+          <!-- Warm coral-amber afterglow hugging the horizon around and after sunset -->
+          <radialGradient id="horizonEmber" cx="50%" cy="100%" r="55%">
+            <stop offset="0%" stop-color="#FFE0A3" stop-opacity="0.88" />
+            <stop offset="38%" stop-color="#F28A3E" stop-opacity="0.48" />
+            <stop offset="76%" stop-color="#E55B24" stop-opacity="0.16" />
+            <stop offset="100%" stop-color="#E55B24" stop-opacity="0" />
+          </radialGradient>
+
+          <!-- Calm evening water plane below the horizon (light enough for crisp ink readability) -->
+          <linearGradient id="waterHoriz" x1="1" y1="0" x2="0" y2="0">
+            <stop offset="0%" stop-color="#F8DBB8" />
+            <stop offset="38%" stop-color="#F4C5A1" />
+            <stop offset="72%" stop-color="#E7AC8C" />
+            <stop offset="100%" stop-color="#D49C82" />
+          </linearGradient>
+
+          <linearGradient id="waterDepth" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#B54215" stop-opacity="0.15" />
+            <stop offset="28%" stop-color="#F5E5D2" stop-opacity="0.06" />
+            <stop offset="100%" stop-color="#FCF8F2" stop-opacity="0.28" />
+          </linearGradient>
+
+          <!-- Horizon line gradients -->
+          <linearGradient id="horizonBase" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stop-color="#4E3527" stop-opacity="0.06" />
+            <stop offset="12%" stop-color="#4E3527" stop-opacity="0.30" />
+            <stop offset="56%" stop-color="#B54215" stop-opacity="0.32" />
+            <stop offset="88%" stop-color="#9A6307" stop-opacity="0.26" />
+            <stop offset="100%" stop-color="#9A6307" stop-opacity="0.05" />
+          </linearGradient>
+
+          <linearGradient id="elapsedLineGrad" x1="314" y1="0" x2="44" y2="0" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stop-color="#F2A92C" />
+            <stop offset="56%" stop-color="#E55B24" />
+            <stop offset="100%" stop-color="#B54215" />
+          </linearGradient>
+
+          <!-- Hero sun gradients -->
+          <radialGradient id="auraVeilGrad">
+            <stop offset="0%" stop-color="#FFEBB8" stop-opacity="0.52" />
+            <stop offset="46%" stop-color="#F2A92C" stop-opacity="0.24" />
+            <stop offset="76%" stop-color="#E55B24" stop-opacity="0.09" />
+            <stop offset="100%" stop-color="#E55B24" stop-opacity="0" />
+          </radialGradient>
+
+          <radialGradient id="auraCoreGrad">
+            <stop offset="0%" stop-color="#FFF9E6" stop-opacity="0.78" />
+            <stop offset="54%" stop-color="#F7C254" stop-opacity="0.32" />
+            <stop offset="100%" stop-color="#E55B24" stop-opacity="0" />
+          </radialGradient>
+
+          <radialGradient id="auraWispGrad" cx="46%" cy="46%" r="54%">
+            <stop offset="0%" stop-color="#FFF7DC" stop-opacity="0" />
+            <stop offset="56%" stop-color="#FFE7A8" stop-opacity="0.32" />
+            <stop offset="78%" stop-color="#F4BE94" stop-opacity="0.16" />
+            <stop offset="100%" stop-color="#E55B24" stop-opacity="0" />
+          </radialGradient>
+
+          <radialGradient id="sunDiscWarm" cx="38%" cy="32%" r="72%">
+            <stop offset="0%" stop-color="#FFF9E6" />
+            <stop offset="36%" stop-color="#FBD066" />
+            <stop offset="72%" stop-color="#F2A92C" />
+            <stop offset="100%" stop-color="#E55B24" />
+          </radialGradient>
+
+          <radialGradient id="sunDiscDeep" cx="40%" cy="34%" r="72%">
+            <stop offset="0%" stop-color="#FFCF94" />
+            <stop offset="48%" stop-color="#EE6B2B" />
+            <stop offset="100%" stop-color="#BA3E13" />
+          </radialGradient>
+
+          <linearGradient id="rayGradWarm" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#E87C22" />
+            <stop offset="100%" stop-color="#F2A92C" />
+          </linearGradient>
+
+          <!-- Warm sculpted cloud fills (sunlit ivory to soft apricot belly) -->
+          <linearGradient id="cloudFrontGrad" x1="0.2" y1="0" x2="0.6" y2="1">
+            <stop offset="0%" stop-color="#FFFDF8" />
+            <stop offset="58%" stop-color="#FCF4E8" />
+            <stop offset="100%" stop-color="#F7D7BC" />
+          </linearGradient>
+
+          <linearGradient id="cloudFrontDusk" x1="0.2" y1="0" x2="0.6" y2="1">
+            <stop offset="0%" stop-color="#FBE9DA" />
+            <stop offset="65%" stop-color="#F0C7AD" />
+            <stop offset="100%" stop-color="#DBA288" />
+          </linearGradient>
+
+          <linearGradient id="cloudBackGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#FFFBF3" />
+            <stop offset="100%" stop-color="#F9DFC7" />
+          </linearGradient>
+
+          <radialGradient id="waterBloom" cx="50%" cy="0%" r="65%">
+            <stop offset="0%" stop-color="#FFF0C6" stop-opacity="0.72" />
+            <stop offset="52%" stop-color="#F5B663" stop-opacity="0.28" />
+            <stop offset="100%" stop-color="#E55B24" stop-opacity="0" />
+          </radialGradient>
+
+          <filter id="cloudSoftShadow" x="-25%" y="-25%" width="150%" height="175%">
+            <feDropShadow dx="0" dy="1.8" stdDeviation="1.7" flood-color="#9A4216" flood-opacity="0.16" />
+          </filter>
+
+          <!-- Clean horizon clipping planes -->
+          <clipPath id="skyClip">
+            <rect x="0" y="0" width="358" height="112" />
+          </clipPath>
+          <clipPath id="waterClip">
+            <rect x="0" y="112" width="358" height="90" />
+          </clipPath>
+        </defs>
+
+        <!-- 1. SUNSET SKY -->
+        <g clip-path="url(#skyClip)">
+          <rect x="0" y="0" width="358" height="112" fill="url(#skyHoriz)" />
+          <rect x="0" y="0" width="358" height="112" fill="url(#skyVert)" />
+          <rect id="duskSky" x="0" y="0" width="358" height="112" fill="url(#duskVeil)" opacity="0" />
+
+          <!-- Soft sun-following atmospheric sky radiance -->
+          <ellipse id="skyBloom" cx="236" cy="74" rx="126" ry="74" fill="url(#sunSkyBloom)" />
+
+          <!-- Subtle horizon warm ember when sun approaches/dips below waterline -->
+          <ellipse id="emberGlow" cx="236" cy="112" rx="76" ry="38" fill="url(#horizonEmber)" opacity="0.25" />
+
+          <!-- Whisper-quiet distant coastal ridge silhouette on far left dusk side -->
+          <path
+            d="M 0 112 L 0 105 C 28 103 52 106 86 108 C 118 110 144 111 182 112 Z"
+            fill="#8F553D"
+            opacity="0.10"
+          />
+
+          <!-- First quiet ivory stars over darkness end (appear only after sunset) -->
+          <g id="stars" opacity="0" fill="#FFF8EC">
+            <path class="star" d="M 30 25 L 31.3 28.4 L 34.7 29.7 L 31.3 31 L 30 34.4 L 28.7 31 L 25.3 29.7 L 28.7 28.4 Z" style="animation-delay: 0s;" />
+            <path class="star" d="M 64 41 L 64.9 43.3 L 67.2 44.2 L 64.9 45.1 L 64 47.4 L 63.1 45.1 L 60.8 44.2 L 63.1 43.3 Z" style="animation-delay: -1.8s;" />
+            <circle class="star" cx="90" cy="22" r="1.2" style="animation-delay: -3.1s;" />
+          </g>
+
+          <!-- Rear sculpted cloud (drifts softly behind upper-right shoulder of the hero sun) -->
+          <g id="cloudBack" opacity="0.88">
+            <path
+              d="M 10 -6.5 L 27.5 -6.5 C 31 -6.5 33.2 -8.7 33.2 -11.2 C 33.2 -13.6 31.1 -15.5 28.5 -15.4 C 27.5 -18.5 24.4 -20.4 20.9 -19.9 C 18.2 -19.5 16.2 -17.6 15.5 -15.2 C 14.3 -15.6 12.8 -15.4 11.6 -14.6 C 9.2 -14.4 7.4 -12.6 7.4 -10.3 C 7.4 -8.1 8.5 -6.5 10 -6.5 Z"
+              fill="url(#cloudBackGrad)"
+            />
+          </g>
+
+          <!-- HERO SUN (clipped cleanly by horizon line as it sets after 16:37) -->
+          <g id="heroSun">
+            <!-- Delicate fluttery layered aura -->
+            <g id="sunAura">
+              <circle class="aura-veil" r="46" fill="url(#auraVeilGrad)" />
+              <ellipse class="aura-wisp" rx="39" ry="35" fill="url(#auraWispGrad)" />
+              <circle class="aura-core" r="30" fill="url(#auraCoreGrad)" />
+            </g>
+
+            <!-- 12 sculpted tapered warm rays (built in 3 phase-offset shimmer groups) -->
+            <g id="sunRays"></g>
+
+            <!-- Warm sun disc with subtle dimensional rim -->
+            <circle r="18.5" fill="url(#sunDiscWarm)" />
+            <circle id="sunDiscLate" r="18.5" fill="url(#sunDiscDeep)" opacity="0" />
+            <!-- Whisper-soft inner luminous halo -->
+            <circle r="13.5" fill="#FFF8E3" opacity="0.16" />
+            <!-- Crisp upper sunlit specular crescent -->
+            <path
+              d="M -10.8 -8.8 A 14.2 14.2 0 0 1 9.6 -10.2"
+              fill="none"
+              stroke="#FFFDF6"
+              stroke-opacity="0.62"
+              stroke-width="1.35"
+              stroke-linecap="round"
+            />
+            <!-- Subtle warm terracotta rim definition -->
+            <circle r="18.5" fill="none" stroke="#C74B1A" stroke-opacity="0.24" stroke-width="0.8" />
+          </g>
+        </g>
+
+        <!-- Foreground sculpted cloud (tucks sleekly under lower-left flank of hero sun, leaving sunset face clear) -->
+        <g id="cloudFront" filter="url(#cloudSoftShadow)">
+          <path
+            d="M -26.4 19.8 L 3.8 19.8 C 7.2 19.8 9.4 17.6 9.4 15.0 C 9.4 12.5 7.3 10.6 4.7 10.7 C 3.6 7.5 0.4 5.7 -3.1 6.2 C -5.8 6.6 -7.9 8.4 -8.7 10.8 C -10.2 10.1 -12.1 10.0 -13.7 10.8 C -15.6 9.1 -18.5 9.0 -20.6 10.7 C -21.9 11.7 -22.6 13.0 -22.9 14.3 C -26.0 14.5 -28.6 16.2 -28.6 18.0 C -28.6 19.1 -27.6 19.8 -26.4 19.8 Z"
+            fill="url(#cloudFrontGrad)"
+          />
+          <path
+            id="cloudFrontDuskLayer"
+            d="M -26.4 19.8 L 3.8 19.8 C 7.2 19.8 9.4 17.6 9.4 15.0 C 9.4 12.5 7.3 10.6 4.7 10.7 C 3.6 7.5 0.4 5.7 -3.1 6.2 C -5.8 6.6 -7.9 8.4 -8.7 10.8 C -10.2 10.1 -12.1 10.0 -13.7 10.8 C -15.6 9.1 -18.5 9.0 -20.6 10.7 C -21.9 11.7 -22.6 13.0 -22.9 14.3 C -26.0 14.5 -28.6 16.2 -28.6 18.0 C -28.6 19.1 -27.6 19.8 -26.4 19.8 Z"
+            fill="url(#cloudFrontDusk)"
+            opacity="0"
+          />
+          <!-- Warm sunlit top-right edge highlight on the cloud -->
+          <path
+            d="M -6.4 8.2 C -3.8 6.4 0.1 6.6 2.4 8.9"
+            fill="none"
+            stroke="#FFFDF9"
+            stroke-opacity="0.72"
+            stroke-width="1.0"
+            stroke-linecap="round"
+          />
+        </g>
+
+        <!-- 2. CALM EVENING WATER PLANE (Below Horizon) -->
+        <g clip-path="url(#waterClip)">
+          <rect x="0" y="112" width="358" height="90" fill="url(#waterHoriz)" />
+          <rect x="0" y="112" width="358" height="90" fill="url(#waterDepth)" />
+
+          <!-- Subtle ambient coastal surface lines -->
+          <g stroke="#FFF7EA" stroke-linecap="round" fill="none">
+            <line x1="18" y1="117.5" x2="340" y2="117.5" stroke-width="0.8" stroke-opacity="0.34" stroke-dasharray="24 14 8 18 32 14" />
+            <line x1="24" y1="124.5" x2="334" y2="124.5" stroke-width="0.75" stroke-opacity="0.22" stroke-dasharray="14 22 28 12 10 24" stroke-dashoffset="9" />
+            <line x1="40" y1="131.5" x2="318" y2="131.5" stroke-width="0.7" stroke-opacity="0.14" stroke-dasharray="18 26 10 20" />
+          </g>
+
+          <!-- Sun reflection shimmer path directly beneath the sun's current X -->
+          <g id="waterReflection">
+            <ellipse cx="0" cy="113" rx="44" ry="12" fill="url(#waterBloom)" />
+            <g stroke="#FFF3D1" stroke-linecap="round">
+              <line class="glint" x1="-15" y1="115.5" x2="15" y2="115.5" stroke-width="1.8" style="animation-delay: 0s;" />
+              <line class="glint" x1="-10.5" y1="119.5" x2="11" y2="119.5" stroke-width="1.5" style="animation-delay: -0.8s;" />
+              <line class="glint" x1="-7" y1="123.5" x2="6.5" y2="123.5" stroke-width="1.2" style="animation-delay: -1.6s;" />
+              <line class="glint" x1="-3.5" y1="127.5" x2="4" y2="127.5" stroke-width="0.95" style="animation-delay: -2.3s;" />
+            </g>
+          </g>
+        </g>
+
+        <!-- 3. THE HORIZON LINE AS TIMELINE -->
+        <line x1="0" y1="112" x2="358" y2="112" stroke="url(#horizonBase)" stroke-width="1" />
+
+        <!-- Subtle start (16:00) and darkness (17:03) anchor ticks on the horizon -->
+        <line x1="314" y1="109.5" x2="314" y2="114.5" stroke="#9A6307" stroke-opacity="0.45" stroke-width="1.15" stroke-linecap="round" />
+        <line x1="44" y1="109.5" x2="44" y2="114.5" stroke="#4E3527" stroke-opacity="0.42" stroke-width="1.15" stroke-linecap="round" />
+
+        <!-- Lit warm progress along the horizon (from 16:00 right -> current time) -->
+        <line id="elapsedGlow" x1="314" y1="112" x2="236" y2="112" stroke="#F2A92C" stroke-opacity="0.34" stroke-width="4.5" stroke-linecap="round" />
+        <line id="elapsedLine" x1="314" y1="112" x2="236" y2="112" stroke="url(#elapsedLineGrad)" stroke-width="2" stroke-linecap="round" />
+
+        <!-- Exact sunset moment tick (16:37): clean minimal architectural hairline tick -->
+        <g id="sunsetTick">
+          <line x1="0" y1="106.5" x2="0" y2="119.5" stroke="#B54215" stroke-opacity="0.62" stroke-width="1.25" stroke-linecap="round" />
+        </g>
+
+        <!-- Soft luminous current-time horizon ember (distinguished clearly from the static sunset tick) -->
+        <g id="nowBead">
+          <circle cx="0" cy="112" r="6.5" fill="#FFF3D2" opacity="0.42" />
+          <circle cx="0" cy="112" r="2.2" fill="#FFF9EC" stroke="#E55B24" stroke-width="1.15" />
+        </g>
+      </svg>
+
+      <!-- Subtle paper grain + specular lip -->
+      <div class="card-grain" aria-hidden="true"></div>
+      <div class="card-rim" aria-hidden="true"></div>
+
+      <!-- Exact sunset tick caption -->
+      <div class="sunset-caption" id="sunsetCaption">
+        <span>שקיעה</span>
+        <strong>16:37</strong>
+      </div>
+
+      <!-- Endpoint anchors (Right: start of sunset, Left: darkness) -->
+      <div class="anchors">
+        <div class="anchor start">
+          <span class="anchor-label">תחילת השקיעה</span>
+          <span class="anchor-time">16:00</span>
+        </div>
+        <div class="anchor dark">
+          <span class="anchor-label">חושך</span>
+          <span class="anchor-time">17:03</span>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Prototype controls outside the card design -->
+  <div class="controls">
+    <div class="btn-group">
+      <button type="button" class="btn primary" id="runBtn">הרצת ערב</button>
+      <button type="button" class="btn" id="resetBtn">איפוס</button>
+    </div>
+    <div class="now-readout">שעה כעת: <strong id="nowText">16:18</strong></div>
+  </div>
+
+  <script>
+    (function () {
+      // Evening timeline in minutes from midnight
+      const START = 16 * 60;         // 16:00 (golden hour start)
+      const SUNSET = 16 * 60 + 37;   // 16:37 (exact sunset)
+      const DARK = 17 * 60 + 3;      // 17:03 (darkness)
+      const SPAN = DARK - START;     // 63 min
+      const DEFAULT_TIME = 16 * 60 + 18; // 16:18
+      const RUN_MS = 15000;          // ~15 seconds for full evening run
+
+      // SVG geometry (viewBox 0 0 358 202)
+      const W = 358;
+      const R = 314;   // right end (16:00)
+      const L = 44;    // left end (17:03)
+      const H = 112;   // horizon waterline Y
+
+      const $ = (id) => document.getElementById(id);
+      const clamp = (v, min = 0, max = 1) => Math.min(max, Math.max(min, v));
+      const xAt = (m) => R - ((m - START) / SPAN) * (R - L);
+      const fmt = (m) => {
+        const total = Math.round(m);
+        const h = Math.floor(total / 60);
+        const mm = total % 60;
+        return String(h).padStart(2, '0') + ':' + String(mm).padStart(2, '0');
+      };
+
+      const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+      const easeOut = (t) => 1 - Math.pow(1 - t, 3.8); // matches cubic-bezier(0.22, 1, 0.36, 1)
+
+      // Build 12 sculpted tapered warm sun rays in 3 staggered shimmer groups
+      const raysContainer = $('sunRays');
+      const SVG_NS = 'http://www.w3.org/2000/svg';
+      const groups = [0, 1, 2].map((idx) => {
+        const g = document.createElementNS(SVG_NS, 'g');
+        g.setAttribute('class', `ray-g${idx + 1}`);
+        raysContainer.appendChild(g);
+        return g;
+      });
+
+      for (let i = 0; i < 12; i++) {
+        const deg = i * 30 - 90; // primary ray points straight up
+        const isLong = i % 2 === 0;
+        const rInner = 22.2;
+        const rOuter = isLong ? 30.8 : 26.8;
+        const halfBase = isLong ? 1.35 : 1.05;
+        const halfTip = isLong ? 0.55 : 0.45;
+
+        // Tapered rounded solar petal ray pointing along +X, then rotated
+        const d = [
+          `M ${rInner.toFixed(2)} ${(-halfBase).toFixed(2)}`,
+          `L ${(rOuter - halfTip).toFixed(2)} ${(-halfTip).toFixed(2)}`,
+          `A ${halfTip} ${halfTip} 0 0 1 ${(rOuter - halfTip).toFixed(2)} ${halfTip.toFixed(2)}`,
+          `L ${rInner.toFixed(2)} ${halfBase.toFixed(2)}`,
+          `A ${halfBase} ${halfBase} 0 0 1 ${rInner.toFixed(2)} ${(-halfBase).toFixed(2)}`,
+          'Z'
+        ].join(' ');
+
+        const ray = document.createElementNS(SVG_NS, 'path');
+        ray.setAttribute('d', d);
+        ray.setAttribute('transform', `rotate(${deg})`);
+        ray.setAttribute('fill', isLong ? '#E87324' : '#F2A92C');
+        ray.setAttribute('fill-opacity', isLong ? '0.88' : '0.82');
+        groups[i % 3].appendChild(ray);
+      }
+
+      // Position static sunset tick & caption at 16:37
+      const sunsetX = xAt(SUNSET);
+      $('sunsetTick').setAttribute('transform', `translate(${sunsetX.toFixed(2)} 0)`);
+      $('sunsetCaption').style.left = ((sunsetX / W) * 100).toFixed(3) + '%';
+
+      // Natural solar elevation above the horizon (px)
+      function sunLift(m) {
+        if (m <= SUNSET) {
+          const p = (m - START) / (SUNSET - START);
+          // Smooth celestial descent from 64px above horizon at 16:00 to +5.5px (radiant setting dome) at 16:37
+          return 5.5 + 58.5 * (1 - Math.pow(p, 1.24));
+        }
+        // Gracefully slips beneath the waterline after 16:37 down to -23px at 17:03
+        const q = clamp((m - SUNSET) / (DARK - SUNSET));
+        return 5.5 - 28.5 * Math.pow(q, 0.86);
+      }
+
+      let currentMinute = DEFAULT_TIME;
+      let rafId = null;
+      let stepTimer = null;
+
+      function stopTimers() {
+        if (rafId !== null) {
+          cancelAnimationFrame(rafId);
+          rafId = null;
+        }
+        if (stepTimer !== null) {
+          clearInterval(stepTimer);
+          stepTimer = null;
+        }
+        $('runBtn').disabled = false;
+      }
+
+      function render(minute) {
+        const m = clamp(minute, START, DARK);
+        currentMinute = m;
+
+        const u = (m - START) / SPAN;
+        const x = xAt(m);
+        const lift = sunLift(m);
+        const y = H - lift;
+
+        // Place hero sun
+        $('heroSun').setAttribute('transform', `translate(${x.toFixed(2)} ${y.toFixed(2)})`);
+
+        // Deepen sun disc to rich sunset orange-red as it nears & kisses the horizon
+        const lateBlend = clamp((m - (SUNSET - 16)) / 24);
+        $('sunDiscLate').setAttribute('opacity', lateBlend.toFixed(3));
+
+        // Gently soften rays & aura as sun sinks behind horizon
+        const postSunset = clamp((m - SUNSET) / (DARK - SUNSET));
+        const rayVis = clamp(1 - Math.max(0, (m - (SUNSET - 6)) / 22));
+        $('sunRays').setAttribute('opacity', (0.18 + 0.82 * rayVis).toFixed(3));
+        $('sunAura').setAttribute('opacity', (1 - 0.62 * postSunset).toFixed(3));
+
+        // Moving atmospheric sky glow behind the sun
+        $('skyBloom').setAttribute('cx', x.toFixed(2));
+        $('skyBloom').setAttribute('cy', Math.min(y, H - 6).toFixed(2));
+        $('skyBloom').setAttribute('opacity', (1 - 0.72 * postSunset).toFixed(3));
+
+        // Horizon ember peaks right around sunset (16:37) and lingers into twilight
+        const sunsetProximity = Math.exp(-Math.pow((m - SUNSET) / 17, 2));
+        const emberOp = clamp(0.18 + 0.76 * sunsetProximity - 0.38 * Math.pow(postSunset, 1.4), 0.12, 0.94);
+        $('emberGlow').setAttribute('cx', x.toFixed(2));
+        $('emberGlow').setAttribute('opacity', emberOp.toFixed(3));
+
+        // Sky dusk glaze & first quiet stars after sunset
+        const duskProgress = clamp((m - (START + 20)) / (DARK - START - 20));
+        $('duskSky').setAttribute('opacity', duskProgress.toFixed(3));
+        $('stars').setAttribute('opacity', (0.92 * clamp((m - (SUNSET + 5)) / 18)).toFixed(3));
+
+        // Clouds travel gently with the sun, parting slightly left near sunset so the setting dome shines clearly
+        const sunsetClear = Math.exp(-Math.pow((m - SUNSET) / 14, 2));
+        const frontCloudX = x - 8 * sunsetClear;
+        const frontCloudY = Math.min(y, H - 23.5);
+        const backCloudY = Math.min(y, H - 15.5);
+        $('cloudFront').setAttribute('transform', `translate(${frontCloudX.toFixed(2)} ${frontCloudY.toFixed(2)})`);
+        $('cloudFrontDuskLayer').setAttribute('opacity', (0.85 * duskProgress).toFixed(3));
+        $('cloudBack').setAttribute('transform', `translate(${x.toFixed(2)} ${backCloudY.toFixed(2)})`);
+        $('cloudBack').setAttribute('opacity', (0.88 - 0.28 * postSunset).toFixed(3));
+
+        // Water reflection glides smoothly beneath the sun
+        $('waterReflection').setAttribute('transform', `translate(${x.toFixed(2)} 0)`);
+        const reflOp = m <= SUNSET
+          ? 0.56 + 0.44 * ((m - START) / (SUNSET - START))
+          : 1 - 0.76 * postSunset;
+        $('waterReflection').setAttribute('opacity', reflOp.toFixed(3));
+
+        // Horizon elapsed light track & subtle now-bead
+        const hasProgress = (R - x) > 1.5;
+        $('elapsedLine').setAttribute('x2', x.toFixed(2));
+        $('elapsedGlow').setAttribute('x2', x.toFixed(2));
+        $('elapsedLine').setAttribute('opacity', hasProgress ? '1' : '0');
+        $('elapsedGlow').setAttribute('opacity', hasProgress ? '0.34' : '0');
+
+        $('nowBead').setAttribute('transform', `translate(${x.toFixed(2)} 0)`);
+        // Stronger bead visibility once the sun is low or below the horizon
+        const beadOp = clamp(0.42 + 0.52 * lateBlend);
+        $('nowBead').setAttribute('opacity', beadOp.toFixed(3));
+
+        $('nowText').textContent = fmt(m);
+      }
+
+      function tweenTo(target, durationMs) {
+        stopTimers();
+        if (reduceMotion.matches) {
+          render(target);
+          return;
+        }
+        const from = currentMinute;
+        const t0 = performance.now();
+        function frame(now) {
+          const p = clamp((now - t0) / durationMs);
+          render(from + (target - from) * easeOut(p));
+          if (p < 1) {
+            rafId = requestAnimationFrame(frame);
+          } else {
+            rafId = null;
+          }
+        }
+        rafId = requestAnimationFrame(frame);
+      }
+
+      $('runBtn').addEventListener('click', function () {
+        stopTimers();
+        if (reduceMotion.matches) {
+          // No sliding transition: step cleanly without glide
+          let m = START;
+          render(m);
+          $('runBtn').disabled = true;
+          stepTimer = setInterval(function () {
+            m += 1;
+            render(m);
+            if (m >= DARK) {
+              clearInterval(stepTimer);
+              stepTimer = null;
+              $('runBtn').disabled = false;
+            }
+          }, Math.round(RUN_MS / SPAN));
+          return;
+        }
+
+        render(START);
+        $('runBtn').disabled = true;
+        const t0 = performance.now();
+        function frame(now) {
+          const p = clamp((now - t0) / RUN_MS);
+          render(START + SPAN * p);
+          if (p < 1) {
+            rafId = requestAnimationFrame(frame);
+          } else {
+            rafId = null;
+            $('runBtn').disabled = false;
+          }
+        }
+        rafId = requestAnimationFrame(frame);
+      });
+
+      $('resetBtn').addEventListener('click', function () {
+        tweenTo(DEFAULT_TIME, 850);
+      });
+
+      // Optional ?t=HH:MM query parameter for reviewing any exact evening state
+      const match = /[?&]t=(\d{1,2}):(\d{2})/.exec(window.location.search);
+      if (match) {
+        render(Number(match[1]) * 60 + Number(match[2]));
+      } else {
+        render(DEFAULT_TIME);
+      }
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,708 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Spotlight — כרטיס זמני השקיעה</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --ground: #F5EDE3;
+      --sheet: #FCF8F2;
+      --sand: #F5E5D2;
+      --sandSoft: #FBF3E8;
+      --peach: #F4BE94;
+      --orange: #E55B24;
+      --orangeSoft: #FBE6DA;
+      --orangeText: #B54215;
+      --gold: #F2A92C;
+      --goldSoft: #FDF2D6;
+      --goldText: #9A6307;
+      --ink: #21150F;
+      --inkSoft: #4E3527;
+      --muted: #7B5C4B;
+      --line: #EAE0D3;
+      --obsidian: #1A120E;
+      --ease: cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--ground);
+      color: var(--ink);
+      font-family: 'Rubik', system-ui, -apple-system, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px 12px 36px;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* 390px mobile frame reflecting Spotlight's bottom sheet */
+    .phone-sheet {
+      width: 390px;
+      max-width: 100%;
+      background: var(--sheet);
+      border-radius: 30px;
+      padding: 12px 16px 22px;
+      box-shadow:
+        0 20px 50px -18px rgba(33, 21, 15, 0.16),
+        0 2px 8px rgba(33, 21, 15, 0.05);
+      border: 1px solid var(--line);
+    }
+
+    .sheet-handle {
+      width: 36px;
+      height: 4px;
+      border-radius: 99px;
+      background: #E2D5C5;
+      margin: 0 auto 14px;
+    }
+
+    /* Redesigned Twilight Card (~358px) */
+    .twilight-card {
+      position: relative;
+      width: 100%;
+      border-radius: 22px;
+      padding: 15px 18px 14px;
+      overflow: hidden;
+      /* Warm sunset sky wash: golden right (16:00) -> apricot-orange center -> warm dusk left (17:03) */
+      background:
+        radial-gradient(125% 110% at 92% 10%, rgba(242, 169, 44, 0.24) 0%, rgba(242, 169, 44, 0) 58%),
+        radial-gradient(90% 95% at 44% 72%, rgba(229, 91, 36, 0.17) 0%, rgba(229, 91, 36, 0) 64%),
+        radial-gradient(95% 115% at 4% 85%, rgba(78, 53, 39, 0.18) 0%, rgba(78, 53, 39, 0) 62%),
+        linear-gradient(to left, #FDF2D6 0%, #FBE6DA 42%, #F4BE94 78%, #E4BEA9 100%);
+      border: 1px solid rgba(229, 91, 36, 0.16);
+      box-shadow:
+        inset 0 1px 0 rgba(252, 248, 242, 0.78),
+        inset 0 -1px 0 rgba(78, 53, 39, 0.06),
+        0 8px 22px -12px rgba(181, 66, 21, 0.22);
+    }
+
+    .card-atmosphere {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+    }
+
+    .card-grain {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      opacity: 0.05;
+      mix-blend-mode: multiply;
+    }
+
+    /* Top anchor row: start (right) and darkness (left) */
+    .anchors {
+      position: relative;
+      z-index: 2;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+      margin-bottom: 4px;
+    }
+
+    .anchor {
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+    }
+
+    .anchor.start {
+      text-align: right;
+      align-items: flex-start;
+    }
+
+    .anchor.dark {
+      text-align: left;
+      align-items: flex-end;
+    }
+
+    .anchor-label {
+      font-size: 11.5px;
+      font-weight: 500;
+      line-height: 1.25;
+      letter-spacing: 0.01em;
+    }
+
+    .anchor.start .anchor-label {
+      color: var(--goldText);
+    }
+
+    .anchor.dark .anchor-label {
+      color: var(--inkSoft);
+      opacity: 0.88;
+    }
+
+    .anchor-time {
+      font-size: 21px;
+      font-weight: 700;
+      line-height: 1.08;
+      letter-spacing: -0.02em;
+      font-variant-numeric: tabular-nums;
+      color: var(--ink);
+    }
+
+    /* Horizon timeline stage */
+    .stage {
+      position: relative;
+      z-index: 2;
+      width: 100%;
+      height: 76px;
+      margin-top: 2px;
+      direction: ltr;
+    }
+
+    .track-svg {
+      display: block;
+      width: 100%;
+      height: 76px;
+      overflow: visible;
+    }
+
+    .sunset-caption {
+      position: absolute;
+      top: 56px;
+      transform: translateX(-50%);
+      font-size: 11px;
+      font-weight: 500;
+      line-height: 1;
+      color: var(--orangeText);
+      white-space: nowrap;
+      letter-spacing: -0.01em;
+      font-variant-numeric: tabular-nums;
+      direction: rtl;
+      pointer-events: none;
+    }
+
+    /* Detailed sun + tiny clouds + fluttery delicate glow */
+    .sun-node {
+      position: absolute;
+      width: 52px;
+      height: 52px;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      --sun-glow: 1;
+      --sun-rays: 1;
+      transition:
+        left 850ms var(--ease),
+        top 850ms var(--ease);
+    }
+
+    .sun-node.no-transition {
+      transition: none !important;
+    }
+
+    .aura {
+      position: absolute;
+      border-radius: 50%;
+      pointer-events: none;
+    }
+
+    .aura-outer {
+      inset: 2px;
+      background: radial-gradient(
+        circle,
+        rgba(242, 169, 44, 0.34) 0%,
+        rgba(229, 91, 36, 0.16) 46%,
+        rgba(229, 91, 36, 0) 74%
+      );
+      opacity: calc(0.65 * var(--sun-glow));
+      animation: flutter-outer 4.6s ease-in-out infinite;
+    }
+
+    .aura-inner {
+      inset: 11px;
+      background: radial-gradient(
+        circle,
+        rgba(253, 242, 214, 0.78) 0%,
+        rgba(242, 169, 44, 0.36) 52%,
+        rgba(229, 91, 36, 0) 78%
+      );
+      opacity: calc(0.85 * var(--sun-glow));
+      animation: flutter-inner 3.2s var(--ease) infinite alternate;
+    }
+
+    .sun-svg {
+      position: relative;
+      display: block;
+      width: 52px;
+      height: 52px;
+      overflow: visible;
+    }
+
+    .rays-a {
+      opacity: var(--sun-rays);
+      animation: shimmer-a 2.9s ease-in-out infinite;
+    }
+
+    .rays-b {
+      opacity: var(--sun-rays);
+      animation: shimmer-b 3.7s ease-in-out infinite -1.5s;
+    }
+
+    @keyframes flutter-outer {
+      0%, 100% {
+        transform: scale(0.93);
+        opacity: calc(0.42 * var(--sun-glow));
+      }
+      38% {
+        transform: scale(1.06);
+        opacity: calc(0.78 * var(--sun-glow));
+      }
+      72% {
+        transform: scale(0.98);
+        opacity: calc(0.54 * var(--sun-glow));
+      }
+    }
+
+    @keyframes flutter-inner {
+      0% {
+        transform: scale(0.95);
+        opacity: calc(0.62 * var(--sun-glow));
+      }
+      50% {
+        transform: scale(1.04);
+        opacity: calc(0.92 * var(--sun-glow));
+      }
+      100% {
+        transform: scale(0.98);
+        opacity: calc(0.74 * var(--sun-glow));
+      }
+    }
+
+    @keyframes shimmer-a {
+      0%, 100% { opacity: calc(0.48 * var(--sun-rays)); }
+      50% { opacity: calc(0.92 * var(--sun-rays)); }
+    }
+
+    @keyframes shimmer-b {
+      0%, 100% { opacity: calc(0.32 * var(--sun-rays)); }
+      45% { opacity: calc(0.78 * var(--sun-rays)); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .sun-node {
+        transition: none !important;
+      }
+      .aura-outer,
+      .aura-inner,
+      .rays-a,
+      .rays-b {
+        animation: none !important;
+      }
+    }
+
+    /* Prototype controls outside the card design */
+    .controls {
+      width: 390px;
+      max-width: 100%;
+      margin-top: 16px;
+      padding: 0 6px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .btn-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .btn {
+      font-family: inherit;
+      font-size: 13.5px;
+      font-weight: 600;
+      border-radius: 999px;
+      padding: 9px 16px;
+      cursor: pointer;
+      border: 1px solid var(--line);
+      background: var(--sheet);
+      color: var(--ink);
+      transition: transform 0.09s var(--ease), background-color 0.18s var(--ease);
+    }
+
+    .btn:active {
+      transform: scale(0.97);
+    }
+
+    .btn.primary {
+      background: var(--obsidian);
+      color: var(--sheet);
+      border-color: var(--obsidian);
+    }
+
+    .btn:disabled {
+      opacity: 0.55;
+      cursor: default;
+    }
+
+    .clock-readout {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .clock-readout strong {
+      color: var(--inkSoft);
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+
+  <main class="phone-sheet" aria-label="תצוגת אבטיפוס לכרטיס השקיעה">
+    <div class="sheet-handle" aria-hidden="true"></div>
+
+    <section class="twilight-card" aria-label="זמני השקיעה">
+      <!-- Subtle warm sky & coastal horizon backdrop -->
+      <svg class="card-atmosphere" viewBox="0 0 358 142" preserveAspectRatio="none" aria-hidden="true">
+        <defs>
+          <linearGradient id="duskBand" x1="1" y1="0" x2="0" y2="0.4">
+            <stop offset="0%" stop-color="#F2A92C" stop-opacity="0.10" />
+            <stop offset="56%" stop-color="#E55B24" stop-opacity="0.14" />
+            <stop offset="100%" stop-color="#4E3527" stop-opacity="0.18" />
+          </linearGradient>
+          <linearGradient id="horizonGlow" x1="1" y1="0" x2="0" y2="0">
+            <stop offset="0%" stop-color="#F2A92C" stop-opacity="0.18" />
+            <stop offset="58%" stop-color="#E55B24" stop-opacity="0.34" />
+            <stop offset="100%" stop-color="#7B5C4B" stop-opacity="0.22" />
+          </linearGradient>
+        </defs>
+        <!-- Soft distant ridge and coastal dusk wash -->
+        <path d="M0 95 Q110 89 225 94 T358 91 L358 142 L0 142 Z" fill="url(#duskBand)" />
+        <path d="M0 107 Q150 103 358 106 L358 142 L0 142 Z" fill="#4E3527" fill-opacity="0.045" />
+      </svg>
+
+      <!-- Tactile editorial grain -->
+      <svg class="card-grain" aria-hidden="true">
+        <filter id="sunsetGrain">
+          <feTurbulence type="fractalNoise" baseFrequency="0.82" numOctaves="3" stitchTiles="stitch" />
+          <feColorMatrix type="saturate" values="0" />
+        </filter>
+        <rect width="100%" height="100%" filter="url(#sunsetGrain)" />
+      </svg>
+
+      <!-- Top labels & times -->
+      <div class="anchors">
+        <div class="anchor start">
+          <span class="anchor-label">תחילת השקיעה</span>
+          <span class="anchor-time">16:00</span>
+        </div>
+        <div class="anchor dark">
+          <span class="anchor-label">חושך</span>
+          <span class="anchor-time">17:03</span>
+        </div>
+      </div>
+
+      <!-- Horizon & sun arc stage -->
+      <div class="stage">
+        <svg class="track-svg" viewBox="0 0 322 76" aria-hidden="true">
+          <defs>
+            <linearGradient id="sunTrailGrad" x1="304" y1="17" x2="18" y2="49" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stop-color="#F2A92C" />
+              <stop offset="56%" stop-color="#E55B24" />
+              <stop offset="100%" stop-color="#9A5337" />
+            </linearGradient>
+            <linearGradient id="horizonLineGrad" x1="322" y1="0" x2="0" y2="0" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stop-color="#9A6307" stop-opacity="0.16" />
+              <stop offset="58%" stop-color="#B54215" stop-opacity="0.34" />
+              <stop offset="100%" stop-color="#4E3527" stop-opacity="0.28" />
+            </linearGradient>
+          </defs>
+
+          <!-- Quiet horizon reference line -->
+          <line x1="4" y1="42" x2="318" y2="42" stroke="url(#horizonLineGrad)" stroke-width="1" />
+
+          <!-- Subtle full evening arc (upcoming light) -->
+          <path
+            id="baseArc"
+            d="M 304 17 Q 161 45.8 18 49"
+            fill="none"
+            stroke="#7B5C4B"
+            stroke-opacity="0.24"
+            stroke-width="1.6"
+            stroke-dasharray="2 3.5"
+            stroke-linecap="round"
+          />
+
+          <!-- Elapsed warm glow trail along the arc -->
+          <path
+            id="progressArc"
+            d="M 304 17 Q 161 45.8 18 49"
+            fill="none"
+            stroke="url(#sunTrailGrad)"
+            stroke-width="2.6"
+            stroke-linecap="round"
+          />
+
+          <!-- Endpoint anchor dots -->
+          <circle cx="304" cy="17" r="2.2" fill="#9A6307" fill-opacity="0.45" />
+          <circle cx="18" cy="49" r="2.2" fill="#4E3527" fill-opacity="0.48" />
+
+          <!-- Exact sunset moment tick (16:37) where the sun kisses the horizon -->
+          <line id="sunsetTick" x1="136" y1="36.5" x2="136" y2="49.5" stroke="#B54215" stroke-opacity="0.58" stroke-width="1.35" stroke-linecap="round" />
+          <circle id="sunsetDot" cx="136" cy="42" r="2.6" fill="#E55B24" fill-opacity="0.88" stroke="#FCF8F2" stroke-width="1" />
+        </svg>
+
+        <div class="sunset-caption" id="sunsetCaption">שקיעה 16:37</div>
+
+        <!-- Detailed minimal sun with tiny clouds & delicate fluttery aura -->
+        <div class="sun-node" id="sunNode" aria-hidden="true">
+          <div class="aura aura-outer"></div>
+          <div class="aura aura-inner"></div>
+          <svg class="sun-svg" viewBox="0 0 48 48">
+            <defs>
+              <radialGradient id="sunCoreGrad" cx="62%" cy="35%" r="68%">
+                <stop offset="0%" stop-color="#FFF8E1" />
+                <stop offset="48%" stop-color="#F2A92C" />
+                <stop offset="100%" stop-color="#E55B24" />
+              </radialGradient>
+              <linearGradient id="cloudGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#FCF8F2" />
+                <stop offset="100%" stop-color="#FBE6DA" />
+              </linearGradient>
+            </defs>
+
+            <!-- Delicate alternating sun rays -->
+            <g class="rays-a" stroke="#E55B24" stroke-width="1.25" stroke-linecap="round">
+              <line x1="24" y1="11.2" x2="24" y2="13.5" />
+              <line x1="35.1" y1="17.6" x2="33.1" y2="18.7" />
+              <line x1="35.1" y1="30.4" x2="33.1" y2="29.3" />
+              <line x1="24" y1="36.8" x2="24" y2="34.5" />
+              <line x1="12.9" y1="30.4" x2="14.9" y2="29.3" />
+              <line x1="12.9" y1="17.6" x2="14.9" y2="18.7" />
+            </g>
+            <g class="rays-b" stroke="#F2A92C" stroke-width="1.1" stroke-linecap="round">
+              <line x1="30.1" y1="13.4" x2="29.1" y2="15.2" />
+              <line x1="36.2" y1="24" x2="34.2" y2="24" />
+              <line x1="30.1" y1="34.6" x2="29.1" y2="32.8" />
+              <line x1="17.9" y1="34.6" x2="18.9" y2="32.8" />
+              <line x1="11.8" y1="24" x2="13.8" y2="24" />
+              <line x1="17.9" y1="13.4" x2="18.9" y2="15.2" />
+            </g>
+
+            <!-- Warm sun disc -->
+            <circle
+              cx="24"
+              cy="24"
+              r="7.6"
+              fill="url(#sunCoreGrad)"
+              stroke="#B54215"
+              stroke-opacity="0.45"
+              stroke-width="0.7"
+            />
+            <!-- Subtle inner rim highlight -->
+            <path
+              d="M 21.2 18.4 A 6.1 6.1 0 0 1 29.4 22.1"
+              fill="none"
+              stroke="#FFFDF7"
+              stroke-opacity="0.65"
+              stroke-width="0.85"
+              stroke-linecap="round"
+            />
+
+            <!-- Tiny warm cloud wisp on left flank -->
+            <path
+              d="M 14.5 27.6 L 19.3 27.6 C 20.2 27.6 20.8 27.0 20.8 26.2 C 20.8 25.4 20.1 24.8 19.3 24.9 C 18.9 24.0 17.9 23.6 17.0 23.9 C 16.3 24.1 15.9 24.6 15.7 25.2 C 14.8 25.1 13.8 25.6 13.6 26.4 C 13.5 27.1 13.9 27.6 14.5 27.6 Z"
+              fill="url(#cloudGrad)"
+              fill-opacity="0.95"
+              stroke="#B54215"
+              stroke-opacity="0.34"
+              stroke-width="0.7"
+            />
+
+            <!-- Sculpted minimal cloud hugging lower-right edge -->
+            <path
+              d="M 23.6 31.6 L 32.4 31.6 C 33.7 31.6 34.5 30.6 34.5 29.5 C 34.5 28.4 33.6 27.6 32.5 27.6 C 32.0 26.0 30.4 25.2 28.8 25.5 C 27.5 25.7 26.6 26.7 26.3 27.7 C 25.6 27.4 24.6 27.5 23.9 28.2 C 22.8 28.3 22.1 29.2 22.1 30.1 C 22.1 31.0 22.8 31.6 23.6 31.6 Z"
+              fill="url(#cloudGrad)"
+              stroke="#B54215"
+              stroke-opacity="0.38"
+              stroke-width="0.7"
+              style="filter: drop-shadow(0 1px 1.5px rgba(181, 66, 21, 0.14));"
+            />
+          </svg>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Demo controls outside the card -->
+  <div class="controls">
+    <div class="btn-group">
+      <button type="button" class="btn primary" id="runBtn">הרצת ערב</button>
+      <button type="button" class="btn" id="resetBtn">איפוס</button>
+    </div>
+    <div class="clock-readout">שעה כעת: <strong id="clockNow">16:18</strong></div>
+  </div>
+
+  <script>
+    (function () {
+      const START = 16 * 60;      // 16:00
+      const SUNSET = 16 * 60 + 37; // 16:37
+      const DARK = 17 * 60 + 3;    // 17:03
+      const DEFAULT_TIME = START + 18; // 16:18
+      const RUN_DURATION_MS = 15000;
+
+      // SVG coordinate geometry (viewBox 0 0 322 76)
+      const W = 322;
+      const H = 76;
+      const P0 = { x: 304, y: 17 };
+      const P1 = { x: 161, y: 45.8 };
+      const P2 = { x: 18, y: 49 };
+
+      const sunNode = document.getElementById('sunNode');
+      const progressArc = document.getElementById('progressArc');
+      const sunsetTick = document.getElementById('sunsetTick');
+      const sunsetDot = document.getElementById('sunsetDot');
+      const sunsetCaption = document.getElementById('sunsetCaption');
+      const clockNow = document.getElementById('clockNow');
+      const runBtn = document.getElementById('runBtn');
+      const resetBtn = document.getElementById('resetBtn');
+
+      const totalLen = progressArc.getTotalLength();
+      const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+      function bezierPoint(u) {
+        const inv = 1 - u;
+        return {
+          x: inv * inv * P0.x + 2 * inv * u * P1.x + u * u * P2.x,
+          y: inv * inv * P0.y + 2 * inv * u * P1.y + u * u * P2.y
+        };
+      }
+
+      // Find exact SVG arc length for xTarget via binary search (monotonic right-to-left)
+      function arcLengthAtX(xTarget) {
+        let lo = 0;
+        let hi = totalLen;
+        for (let i = 0; i < 14; i++) {
+          const mid = (lo + hi) * 0.5;
+          const pt = progressArc.getPointAtLength(mid);
+          if (pt.x > xTarget) {
+            lo = mid;
+          } else {
+            hi = mid;
+          }
+        }
+        return (lo + hi) * 0.5;
+      }
+
+      function formatMinutes(minutes) {
+        const rounded = Math.round(minutes);
+        const h = Math.floor(rounded / 60);
+        const m = rounded % 60;
+        return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
+      }
+
+      // Position exact sunset tick at 16:37
+      const uSunset = (SUNSET - START) / (DARK - START);
+      const sunsetPt = bezierPoint(uSunset);
+      sunsetTick.setAttribute('x1', sunsetPt.x.toFixed(2));
+      sunsetTick.setAttribute('x2', sunsetPt.x.toFixed(2));
+      sunsetDot.setAttribute('cx', sunsetPt.x.toFixed(2));
+      sunsetDot.setAttribute('cy', sunsetPt.y.toFixed(2));
+      sunsetCaption.style.left = (sunsetPt.x / W * 100).toFixed(2) + '%';
+
+      let currentMinute = DEFAULT_TIME;
+      let rafId = null;
+
+      function render(minute, instant) {
+        const clamped = Math.min(DARK, Math.max(START, minute));
+        const u = (clamped - START) / (DARK - START);
+        const pt = bezierPoint(u);
+
+        if (instant) {
+          sunNode.classList.add('no-transition');
+        } else {
+          sunNode.classList.remove('no-transition');
+        }
+
+        sunNode.style.left = (pt.x / W * 100).toFixed(3) + '%';
+        sunNode.style.top = (pt.y / H * 100).toFixed(3) + '%';
+
+        // Gently soften glow & rays as the sun settles below the horizon after 16:37
+        const postSunset = Math.max(0, (u - uSunset) / (1 - uSunset));
+        const glowStrength = 1 - postSunset * 0.55;
+        const raysStrength = 1 - postSunset * 0.65;
+        sunNode.style.setProperty('--sun-glow', glowStrength.toFixed(3));
+        sunNode.style.setProperty('--sun-rays', raysStrength.toFixed(3));
+
+        // Trim progress trail exactly to the sun center
+        const len = arcLengthAtX(pt.x);
+        progressArc.style.strokeDasharray = totalLen.toFixed(2);
+        progressArc.style.strokeDashoffset = (totalLen - len).toFixed(2);
+
+        clockNow.textContent = formatMinutes(clamped);
+
+        if (instant) {
+          // Force style flush before removing no-transition on later user actions
+          void sunNode.offsetWidth;
+        }
+      }
+
+      function stopAnimation() {
+        if (rafId !== null) {
+          cancelAnimationFrame(rafId);
+          rafId = null;
+        }
+        runBtn.disabled = false;
+      }
+
+      runBtn.addEventListener('click', function () {
+        stopAnimation();
+        if (reducedMotion.matches) {
+          currentMinute = DARK;
+          render(currentMinute, true);
+          return;
+        }
+
+        currentMinute = START;
+        render(currentMinute, true);
+        runBtn.disabled = true;
+
+        const startTime = performance.now();
+        function tick(now) {
+          const elapsed = now - startTime;
+          const progress = Math.min(1, elapsed / RUN_DURATION_MS);
+          currentMinute = START + progress * (DARK - START);
+          render(currentMinute, true);
+
+          if (progress < 1) {
+            rafId = requestAnimationFrame(tick);
+          } else {
+            rafId = null;
+            runBtn.disabled = false;
+          }
+        }
+        rafId = requestAnimationFrame(tick);
+      });
+
+      resetBtn.addEventListener('click', function () {
+        stopAnimation();
+        currentMinute = DEFAULT_TIME;
+        render(currentMinute, reducedMotion.matches);
+      });
+
+      // Initial render at 16:18
+      render(DEFAULT_TIME, true);
+    })();
+  </script>
+</body>
+</html>
