@@ -1,4 +1,5 @@
-import { Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { SheetModal } from './SheetModal';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Defs, LinearGradient, Path, RadialGradient, Rect, Stop, Text as SvgText } from 'react-native-svg';
 import { formatDistance } from '../lib/geo';
@@ -50,7 +51,7 @@ export function SpotDetailSheet({ spot, now, sunset, goldenHour, bearing, onClos
       : `תגיעו ב־${formatClock(arrival)} · ${minsBeforeSunset} דק' לפני השקיעה`;
 
   return (
-    <Modal visible={!!spot} animationType="slide" transparent onRequestClose={onClose}>
+    <SheetModal visible={!!spot} animationType="slide" transparent onRequestClose={onClose}>
       <View style={styles.backdrop}>
         <Pressable style={styles.scrim} onPress={onClose} accessibilityLabel="סגירת פרטי מקום" />
 
@@ -158,7 +159,7 @@ export function SpotDetailSheet({ spot, now, sunset, goldenHour, bearing, onClos
           </View>
         </View>
       </View>
-    </Modal>
+    </SheetModal>
   );
 }
 
