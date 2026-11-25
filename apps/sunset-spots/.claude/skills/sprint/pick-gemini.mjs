@@ -8,7 +8,8 @@
 //   orca orchestration worker-start ... --agent antigravity --model <pick>
 // If `fallback` is true, the preferred model is missing: tell the user which one ran instead.
 import { execFileSync } from 'node:child_process';
-import { existsSync, readdirSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { join } from 'node:path';
 
 const PREFERENCES = {
@@ -69,11 +70,29 @@ if (pick && process.argv.includes('--probe')) {
     quota = /quota/i.test(text) ? `exhausted: ${(text.match(/Resets in [^.\n"]+/) ?? ['?'])[0]}` : `failed: ${text.slice(0, 160)}`;
   }
 }
+// Which Google account is agy signed in as? Orca re-signs agy with its own stored account, and the two accounts have
+// separate quotas (2026-11-25: osh… had quota, ork… was exhausted), so a result means nothing without the account.
+const EXPECTED_ACCOUNT = process.env.AGY_EXPECTED_ACCOUNT ?? 'osh';
+function signedInAccount() {
+  const dir = join(homedir(), '.gemini', 'antigravity-cli', 'log');
+  if (!existsSync(dir)) return null;
+  const logs = readdirSync(dir).filter((f) => f.startsWith('cli-')).map((f) => join(dir, f))
+    .sort((a, b) => statSync(b).mtimeMs - statSync(a).mtimeMs).slice(0, 3);
+  for (const f of logs) {
+    const hits = [...readFileSync(f, 'utf8').matchAll(/authenticated successfully as (\S+?)@/g)];
+    if (hits.length) return hits[hits.length - 1][1];
+  }
+  return null;
+}
+const acct = signedInAccount();
+const account = acct ? `${acct.slice(0, 3)}…` : 'unknown';
+const wrongAccount = acct !== null && !acct.startsWith(EXPECTED_ACCOUNT);
 const premiumMissing = !available.some((id) => /gemini-4-(neon|carbon|argon)/.test(id));
 const result = {
-  role, pick, preferred: prefs[0], fallback: pick !== prefs[0], quota,
+  role, account, pick, preferred: prefs[0], fallback: pick !== prefs[0], quota,
+  accountWarning: wrongAccount ? `agy is signed in as ${account}, expected ${EXPECTED_ACCOUNT}… - switch the Antigravity account in Orca Settings before dispatching` : undefined,
   note: premiumMissing ? 'Neon/Carbon/Argon are not listed: on the Individual plan this usually means the weekly quota is used up.' : undefined,
   available,
 };
 console.log(JSON.stringify(result, null, 2));
-if (!pick || quota.startsWith('exhausted') || quota.startsWith('failed')) process.exit(1);
+if (!pick || wrongAccount || quota.startsWith('exhausted') || quota.startsWith('failed')) process.exit(1);

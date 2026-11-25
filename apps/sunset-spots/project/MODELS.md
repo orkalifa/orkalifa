@@ -33,13 +33,13 @@
 | עברית בממשק | **Opus 5.5** | | GPT-OSS, Luna |
 | תמונות | **Nano Banana** (Antigravity) | Canva, או המשתמש/ת באפליקציית Gemini מפרומפט שהמנהל כותב | מודל טקסט |
 | תזמור | **Opus 5.5** (המנהל) | | Gemini Orchestrator (המבצע תמיד Hydrogen) |
-| Claude Code הגיע למכסה | Claude דרך Antigravity (ב־25.11 זמינים שם רק `claude-opus-4-6-thinking` ו־`claude-sonnet-4-6`, ישנים מ־5.5) | | Fable (לא בתוכנית, רק באישור מפורש) |
+| Claude Code הגיע למכסה | Claude דרך Antigravity: בחשבון osh… יש Opus ו־Sonnet 5.5. בחשבון ork… רק 4.6, שהם ישנים יותר | | Fable (לא בתוכנית, רק באישור מפורש) |
 
 **שלב תוכנית** רק למשימות M/L או רגישות. **רמות מאמץ:** low למכני, medium לרגיל, high לרגיש, xhigh לקשה באמת.
 
 ## זמינות
 - **Claude:** Opus, Sonnet ו־Haiku 5.5. Fable 5.2 לא כלול בתוכנית מאז 16.11.
-- **Gemini דרך Antigravity בלבד** (`agy`). ה־Gemini CLI הופסק למשתמשים פרטיים. הזמינות משתנה (ב־25.11 נשארו רק Hydrogen ו־Flash), ולכן **תמיד** מריצים קודם `node .claude/skills/sprint/pick-gemini.mjs <creative|research|code|math|quick> --probe`. אם יוצא `fallback: true`, אומרים למשתמש/ת לפני השליחה.
+- **Gemini דרך Antigravity בלבד** (`agy`). ה־Gemini CLI הופסק למשתמשים פרטיים. הזמינות משתנה (ב־25.11 נשארו רק Hydrogen ו־Flash), **כל חשבון Google מקבל רשימת מודלים ומכסה משלו** (ב־25.11 ב־osh… היו כל Gemini 4 ו־Claude 5.5, וב־ork… רק Hydrogen, Flash ו־Claude 4.6). לכן **תמיד** מריצים קודם `node .claude/skills/sprint/pick-gemini.mjs <creative|research|code|math|quick> --probe`. הסקריפט מדווח גם על החשבון, ונכשל אם הוא לא osh…. אם יוצא `fallback: true`, אומרים למשתמש/ת לפני השליחה.
 - **Codex:** `gpt-5.6-terra` לסקירה. `gpt-6-luna` לסקירה מהירה של diff קטן. `gpt-reserve` לא בשימוש.
 - **Grok:** `grok-4.7`.
 
