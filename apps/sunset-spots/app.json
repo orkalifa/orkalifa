@@ -12,7 +12,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#FFF4E6",
+        "backgroundColor": "#F5EDE3",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
@@ -27,7 +27,7 @@
       "shortName": "Spotlight",
       "lang": "he",
       "themeColor": "#2A1A12",
-      "backgroundColor": "#FFF4E6"
+      "backgroundColor": "#F5EDE3"
     },
     "plugins": [
       "expo-router",
