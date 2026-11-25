@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { buildIcs } from '../src/lib/ics.ts';
-import { DEFAULT_PREFS, googleEventFor, parsePrefs, serializePrefs, toIcsEvents } from '../src/lib/reminderPlan.ts';
+import { createSheetSession, DEFAULT_PREFS, googleEventFor, parsePrefs, serializePrefs, toIcsEvents } from '../src/lib/reminderPlan.ts';
 import { reminderTimes } from '../src/lib/reminders.ts';
 
 const TLV = { lat: 32.0853, lon: 34.7818 };
@@ -53,4 +53,26 @@ test('Google link: next evening only, no coordinates; none without a reminder', 
   assert.ok(url?.startsWith('https://calendar.google.com/calendar/render?action=TEMPLATE'));
   assert.equal(url?.includes('32.'), false);
   assert.equal(url?.includes('34.'), false);
+});
+
+test('sheet session: a late prefs read never overwrites a fresh tap', () => {
+  const s = createSheetSession();
+  const id = s.open();
+  assert.equal(s.acceptStored(id), true, 'untouched: the stored value applies');
+  s.touch();
+  assert.equal(s.acceptStored(id), false, 'tapped before the read finished: keep the tap');
+  const again = s.open();
+  assert.equal(s.acceptStored(again), true, 'reopening starts clean');
+  assert.equal(s.acceptStored(id), false, 'an older read never applies');
+});
+
+test('sheet session: a result that lands after close (or reopen) is dropped', () => {
+  const s = createSheetSession();
+  s.open();
+  const started = s.current();
+  assert.equal(s.isCurrent(started), true);
+  s.close();
+  assert.equal(s.isCurrent(started), false, 'closed while the download was in flight');
+  s.open();
+  assert.equal(s.isCurrent(started), false, 'still stale after reopening');
 });

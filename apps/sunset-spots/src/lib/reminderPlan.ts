@@ -52,3 +52,41 @@ export function googleEventFor(r: Reminder | undefined, clock: (d: Date) => stri
   if (!r) return null;
   return googleCalendarUrl({ start: r.goldenHour, end: r.sunset, title: sunsetAlertTitle(clock(r.sunset)) });
 }
+
+/**
+ * One "visit" of the sheet, so late async results can't leak into the wrong one:
+ * - a stored-prefs read that finishes after the user already tapped a chip must not overwrite it;
+ * - a calendar result that finishes after the sheet closed (or reopened) must not show its status.
+ * `open()` and `close()` both start a new generation; work started in an older one is ignored.
+ */
+export type SheetSession = {
+  open(): number;
+  close(): void;
+  current(): number;
+  /** The user picked something during this visit. */
+  touch(): void;
+  /** May a stored-prefs read started in generation `id` still be applied? */
+  acceptStored(id: number): boolean;
+  isCurrent(id: number): boolean;
+};
+
+export function createSheetSession(): SheetSession {
+  let gen = 0;
+  let touched = false;
+  return {
+    open() {
+      gen += 1;
+      touched = false;
+      return gen;
+    },
+    close() {
+      gen += 1;
+    },
+    current: () => gen,
+    touch() {
+      touched = true;
+    },
+    acceptStored: (id) => id === gen && !touched,
+    isCurrent: (id) => id === gen,
+  };
+}

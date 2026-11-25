@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { addToCalendar, webEnv } from '../lib/addToCalendar';
 import { buildIcs } from '../lib/ics';
-import { DEFAULT_PREFS, googleEventFor, parsePrefs, PREFS_KEY, serializePrefs, toIcsEvents, type ReminderPrefs } from '../lib/reminderPlan';
+import { createSheetSession, DEFAULT_PREFS, googleEventFor, parsePrefs, PREFS_KEY, serializePrefs, toIcsEvents, type ReminderPrefs } from '../lib/reminderPlan';
 import { reminderTimes, type LeadMinutes, type ReminderDays } from '../lib/reminders';
 import { count } from '../lib/stats';
 import { colors, fonts } from '../theme';
@@ -30,42 +30,37 @@ export function ReminderSheet({ visible, lat, lon, onClose }: Props) {
   const [prefs, setPrefs] = useState<ReminderPrefs>(DEFAULT_PREFS);
   const [status, setStatus] = useState<string | null>(null);
   const [unsupported, setUnsupported] = useState(() => webEnv() === null);
-  const mounted = useRef(true);
+  // Stable across renders; its methods guard against late async results (see createSheetSession).
+  const [session] = useState(createSheetSession);
+  // Each opening starts with no result line (adjusting state during render, not in an effect).
+  const [shownFor, setShownFor] = useState(visible);
+  if (shownFor !== visible) {
+    setShownFor(visible);
+    if (visible) setStatus(null);
+  }
 
-  useEffect(() => {
-    mounted.current = true;
-    return () => {
-      mounted.current = false;
-    };
-  }, []);
-
-  // Last choices, read each time the sheet opens. A close/unmount before the read finishes drops it.
+  // Last choices, read each time the sheet opens. Dropped if the user already tapped a chip,
+  // or if the sheet closed or unmounted before the read finished.
   useEffect(() => {
     if (!visible) return;
-    let cancelled = false;
+    const id = session.open();
     AsyncStorage.getItem(PREFS_KEY)
       .then((raw) => {
-        if (!cancelled) setPrefs(parsePrefs(raw));
+        if (session.acceptStored(id)) setPrefs(parsePrefs(raw));
       })
       .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [visible]);
-
-  // The last result line belongs to that visit; next time the sheet opens clean.
-  const close = () => {
-    setStatus(null);
-    onClose();
-  };
+    return () => session.close();
+  }, [visible, session]);
 
   const choose = (next: ReminderPrefs) => {
+    session.touch();
     setPrefs(next);
     setStatus(null);
     AsyncStorage.setItem(PREFS_KEY, serializePrefs(next)).catch(() => {});
   };
 
   const addFile = async () => {
+    const id = session.current();
     const from = new Date();
     const times = reminderTimes({ lat, lon, from, days: prefs.days, leadMinutes: prefs.lead });
     const ics = buildIcs(toIcsEvents(times, prefs.lead), { now: from });
@@ -74,7 +69,8 @@ export function ReminderSheet({ visible, lat, lon, onClose }: Props) {
       return;
     }
     const result = await addToCalendar(ics);
-    if (!mounted.current) return;
+    // Closed (or closed and reopened, or unmounted) while the file was being delivered: drop it.
+    if (!session.isCurrent(id)) return;
     if (result === 'downloaded' || result === 'shared') count('reminder-added');
     if (result === 'unsupported') setUnsupported(true);
     setStatus(
@@ -95,9 +91,9 @@ export function ReminderSheet({ visible, lat, lon, onClose }: Props) {
   };
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={close}>
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <View style={styles.backdrop}>
-        <Pressable style={styles.scrim} onPress={close} accessibilityLabel="סגירה" />
+        <Pressable style={styles.scrim} onPress={onClose} accessibilityLabel="סגירה" />
         <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 16) + 8 }]}>
           <View style={styles.handle} />
           <Text style={styles.title} accessibilityRole="header">
