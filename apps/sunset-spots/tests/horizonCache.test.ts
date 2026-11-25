@@ -15,6 +15,7 @@ import {
   recordFailures,
   storeHorizons,
 } from '../src/lib/horizonCache.ts';
+import { rayOrigin } from '../src/lib/horizon.ts';
 
 const NOW = Date.UTC(2026, 10, 24, 12);
 const DAY = 24 * 60 * 60 * 1000;
@@ -51,7 +52,8 @@ test("a saved place's key carries its rounded position", () => {
   // The exact coordinates are never in the key.
   const key = horizonCacheKey(mine, 259);
   assert.ok(!key.includes('31.43214') && !key.includes('34.60187'), key);
-  assert.ok(key.includes('31.432,34.602'), key);
+  const o = rayOrigin(mine);
+  assert.ok(key.includes(`${o.lat},${o.lon}`), key);
 });
 
 test('entries expire after MAX_AGE_MS and are pruned on store', () => {

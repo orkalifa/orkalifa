@@ -3,8 +3,8 @@ import type { Spot } from './osm.ts';
 /**
  * Places you saved yourself, like the lone tree by the field. hooks/useMySpots.ts keeps them only in
  * the phone's storage; they aren't uploaded anywhere unless you share one yourself. One thing does leave
- * the phone: to check the horizon, a saved place near you is sent to Open-Meteo's elevation API rounded
- * to ~100 m (3 decimals, see rayOrigin in horizon.ts), so its exact point is never in a request.
+ * the phone: to check the horizon, a saved place near you is sent to Open-Meteo's elevation API
+ * snapped to a ~111 m grid (see privateOrigin in horizon.ts), so its exact point is never in a request.
  */
 
 export type MySpot = { id: string; name: string; lat: number; lon: number; createdAt: number };

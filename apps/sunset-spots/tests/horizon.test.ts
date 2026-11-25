@@ -10,6 +10,8 @@ import {
   horizonFromElevations,
   horizonRequestPoints,
   horizonScore,
+  privateLonStep,
+  privateOrigin,
   rayOrigin,
   samplePoints,
 } from '../src/lib/horizon.ts';
@@ -89,13 +91,17 @@ const urlPairs = (urls: string[]) =>
 
 const isRounded = (v: number) => Math.abs(v * 1000 - Math.round(v * 1000)) < 1e-9;
 
-test("a saved ('mine') spot leaves the phone only rounded to ~100 m", () => {
+test("a saved ('mine') spot leaves the phone only snapped to the ~111 m grid", () => {
   const mine = { id: 'mine/1', kind: 'mine', lat: 31.434567, lon: 34.612345 };
   const pairs = urlPairs(elevationRequestUrls(horizonRequestPoints([mine], 270)));
   assert.equal(pairs.length, SAMPLE_DISTANCES_M.length + 1);
   const [lat, lon] = pairs[0];
-  assert.ok(isRounded(lat) && isRounded(lon), `spot point ${lat},${lon} has more than 3 decimals`);
-  assert.deepEqual([lat, lon], [31.435, 34.612]);
+  assert.ok(isRounded(lat), `spot latitude ${lat} has more than 3 decimals`);
+  assert.equal(lat, 31.435);
+  // The longitude sits on that latitude's grid: a whole number of steps from 0 (the URL keeps 5 decimals).
+  const steps = lon / privateLonStep(31.435);
+  assert.ok(Math.abs(steps - Math.round(steps)) < 0.01, `spot longitude ${lon} is off the grid`);
+  assert.equal(lon, 34.61198);
   for (const [a, b] of pairs) {
     assert.notEqual(a, 31.43457);
     assert.notEqual(b, 34.61235);
@@ -106,6 +112,8 @@ test('non-saved spots are requested exactly as before', () => {
   const spot = { id: 'node/1', kind: 'viewpoint', lat: 31.434567, lon: 34.612345 };
   assert.deepEqual(elevationRequestUrls(horizonRequestPoints([spot], 270)), elevationRequestUrls(samplePoints(spot, 270)));
   assert.deepEqual(rayOrigin(spot), { lat: spot.lat, lon: spot.lon });
+  // Also with no kind and far from Israel: public places are never snapped.
+  assert.deepEqual(rayOrigin({ lat: 59.912345, lon: 10.751234 }), { lat: 59.912345, lon: 10.751234 });
 });
 
 test('a mixed list keeps one ray per spot, in order', () => {
@@ -117,7 +125,106 @@ test('a mixed list keeps one ray per spot, in order', () => {
   const per = SAMPLE_DISTANCES_M.length + 1;
   assert.equal(pts.length, 2 * per);
   assert.deepEqual(pts.slice(0, per), samplePoints({ lat: 31.4, lon: 34.6 }, 260));
-  assert.deepEqual(pts.slice(per), samplePoints({ lat: 31.123, lon: 34.654 }, 260));
+  assert.deepEqual(pts.slice(per), samplePoints(privateOrigin({ lat: 31.123456, lon: 34.654321 }), 260));
+  assert.notDeepEqual(pts[per], { lat: 31.123456, lon: 34.654321 });
+});
+
+// ---- the privacy grid for saved places ----
+
+const METRES_PER_DEG = (Math.PI / 180) * 6371000; // along a meridian (same radius as geo.ts)
+const cosDeg = (deg: number) => Math.cos((deg * Math.PI) / 180);
+
+/**
+ * Walk in 1 m steps (east from `lon0` along `lat`, or north from `lat` along `lon0`) and return how many
+ * steps each privacy cell lasted, i.e. its size in metres. The first and last cells are partial and dropped.
+ */
+const cellSizes = (lat: number, lon0: number, dir: 'east' | 'north', metres = 2000) => {
+  const sizes: number[] = [];
+  let prev = '';
+  let run = 0;
+  for (let i = 0; i <= metres; i++) {
+    const p =
+      dir === 'east'
+        ? { lat, lon: lon0 + i / (METRES_PER_DEG * cosDeg(lat)) }
+        : { lat: lat + i / METRES_PER_DEG, lon: lon0 };
+    const o = privateOrigin(p);
+    const key = `${o.lat},${o.lon}`;
+    if (key === prev) run++;
+    else {
+      if (prev) sizes.push(run);
+      prev = key;
+      run = 1;
+    }
+  }
+  return sizes.slice(1);
+};
+
+const assertCells = (sizes: number[], label: string) => {
+  assert.ok(sizes.length >= 10, `${label}: only ${sizes.length} whole cells`);
+  for (const s of sizes) assert.ok(s >= 100 && s <= 115, `${label}: a ${s} m cell in ${sizes.join(',')}`);
+};
+
+test('privacy grid: in Israel (32°N) a cell is ~111 m both ways', () => {
+  assertCells(cellSizes(32.0002, 34.8, 'east'), '32N east-west');
+  assertCells(cellSizes(32.0002, 34.8, 'north'), '32N north-south');
+});
+
+test('privacy grid: at 60°N a cell is still ≥ 100 m east-west (a fixed 0.001° was ~56 m)', () => {
+  assertCells(cellSizes(60.0002, 10.75, 'east'), '60N east-west');
+  assertCells(cellSizes(-60.0002, -65, 'east'), '60S east-west');
+});
+
+test('privacy grid: no latitude gets an east-west cell narrower than north-south', () => {
+  for (let lat = -89.5; lat <= 89.5; lat += 0.5) {
+    const width = privateLonStep(lat) * METRES_PER_DEG * cosDeg(lat);
+    assert.ok(width >= 111 && width < 112, `${lat}: ${width} m`);
+  }
+  for (const lat of [89.9, 89.99, 89.999]) {
+    const width = privateLonStep(lat) * METRES_PER_DEG * cosDeg(lat);
+    assert.ok(width >= 100 && width < 120, `${lat}: ${width} m`);
+  }
+});
+
+test('privacy grid: near and at the poles it stays finite and in range', () => {
+  for (const lat of [89.4, 89.9, 89.999, 89.9996, 90, 95, -89.9, -89.9996, -90, -95]) {
+    for (const lon of [-180, -0.1, 0, 33.3, 179.99]) {
+      const o = privateOrigin({ lat, lon });
+      assert.ok(Number.isFinite(o.lat) && Number.isFinite(o.lon), `${lat},${lon} -> ${o.lat},${o.lon}`);
+      assert.ok(o.lat >= -90 && o.lat <= 90 && o.lon >= -180 && o.lon < 180, `${lat},${lon} -> ${o.lat},${o.lon}`);
+    }
+  }
+  // At the pole itself every longitude is the same place, so they all snap to one point.
+  const atPole = new Set([-180, -90, 0, 45, 179.9].map((lon) => JSON.stringify(privateOrigin({ lat: 90, lon }))));
+  assert.equal(atPole.size, 1);
+});
+
+test('privacy grid: longitudes wrap into [-180, 180) and no thin cell sits on the antimeridian', () => {
+  const seam = [180, -180, 540, -540].map((lon) => privateOrigin({ lat: 32, lon }));
+  for (const o of seam) assert.deepEqual(o, seam[0]);
+  // lat 0 and 60 have an even number of cells (one centred on ±180), lat 32 an odd one.
+  for (const lat of [0, 32, 60]) {
+    for (const lon of [179.9999, 179.99999, -179.9999, 180, 359.9]) {
+      const o = privateOrigin({ lat, lon });
+      assert.ok(o.lon >= -180 && o.lon < 180, `${lat},${lon} -> ${o.lon}`);
+    }
+  }
+  for (const lat of [0, 32, 60, -17.8]) assertCells(cellSizes(lat + 0.0002, 179.99, 'east'), `seam at ${lat}`);
+});
+
+test('privacy grid: snapping is deterministic and idempotent', () => {
+  const places = [
+    { lat: 31.434567, lon: 34.612345 },
+    { lat: 59.91234, lon: 10.75111 },
+    { lat: -33.85678, lon: 151.21543 },
+    { lat: -17.71234, lon: -179.99876 },
+    { lat: 64.14321, lon: -21.94211 },
+  ];
+  for (const p of places) {
+    const o = privateOrigin(p);
+    assert.deepEqual(privateOrigin({ ...p }), o);
+    assert.deepEqual(privateOrigin(o), o);
+    assert.deepEqual(rayOrigin({ ...p, kind: 'mine' }), o);
+  }
 });
 
 // ---- fetchHorizons with a mocked fetch (no network) ----

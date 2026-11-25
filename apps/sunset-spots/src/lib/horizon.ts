@@ -26,20 +26,53 @@ export type Horizon = {
   sea: boolean;
 };
 
-/** Saved places ('mine') leave the phone only rounded to this many decimals (~100 m). */
+/** Saved places ('mine') leave the phone with latitude rounded to this many decimals (0.001° ≈ 111 m). */
 export const PRIVATE_DECIMALS = 3;
+const PRIVATE_STEP_DEG = 10 ** -PRIVATE_DECIMALS;
 
 const roundTo = (x: number, decimals: number) => {
   const f = 10 ** decimals;
   return Math.round(x * f) / f;
 };
 
+/** Longitude wrapped into [-180, 180). */
+const wrapLon = (lon: number) => ((((lon + 180) % 360) + 360) % 360) - 180;
+
 /**
- * Where the terrain ray starts. For a place you saved yourself this is its position rounded to ~100 m,
- * so the exact point is in no request (the ray samples are derived from the rounded point too).
+ * Longitude step of the privacy grid at a (rounded) latitude, in degrees. A degree of longitude shrinks
+ * with cos(lat), so a fixed 0.001° would be ~94 m wide in Israel but ~56 m at 60°N. The step is
+ * 360/n with n = floor(360·cos(lat)/0.001): about 0.001/cos(lat), so every cell is ~111 m east-west
+ * like it is north-south, never narrower. Because it divides 360 exactly, the cells line up across the
+ * antimeridian (no thin sliver cell there), and n ≥ 1 caps it at 360° near the poles (no NaN/Infinity).
+ */
+export function privateLonStep(roundedLat: number): number {
+  const cells = Math.floor((360 * Math.cos((roundedLat * Math.PI) / 180)) / PRIVATE_STEP_DEG);
+  return 360 / Math.max(1, cells);
+}
+
+/**
+ * A saved place snapped to the privacy grid: latitude to 0.001° (~111 m), longitude to
+ * `privateLonStep` of that rounded latitude (≥ ~111 m), wrapped into [-180, 180). Pure and
+ * deterministic: the same place always gives the same point (so the horizon cache keeps hitting),
+ * and snapping a snapped point again changes nothing. The last 6-decimal rounding (< 10 cm) only
+ * keeps the number short.
+ */
+export function privateOrigin({ lat, lon }: LatLon): LatLon {
+  const rLat = Math.min(90, Math.max(-90, roundTo(lat, PRIVATE_DECIMALS)));
+  const step = privateLonStep(rLat);
+  const rLon = roundTo(wrapLon(Math.round(wrapLon(lon) / step) * step), 6);
+  return { lat: rLat, lon: rLon >= 180 ? rLon - 360 : rLon }; // a hair under 180 can round up to 180
+}
+
+/**
+ * Where the terrain ray starts. For a place you saved yourself ('mine') this is `privateOrigin`, and
+ * this is exactly what leaves the phone for it: that one snapped point (a cell of ~111 m × ≥ ~111 m
+ * anywhere on Earth) plus the ray samples toward the sunset computed from it, sent to Open-Meteo's
+ * elevation API at 5 decimals. Its exact position, name, id and save time are in no request.
+ * Every other spot is a public place and is sent as it is.
  */
 export function rayOrigin(spot: LatLon & { kind?: string }): LatLon {
-  if (spot.kind === 'mine') return { lat: roundTo(spot.lat, PRIVATE_DECIMALS), lon: roundTo(spot.lon, PRIVATE_DECIMALS) };
+  if (spot.kind === 'mine') return privateOrigin(spot);
   return { lat: spot.lat, lon: spot.lon };
 }
 
