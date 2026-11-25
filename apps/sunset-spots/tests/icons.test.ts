@@ -93,11 +93,15 @@ test('app.json points at existing icon files and the parchment background', () =
   assert.equal(app.web.backgroundColor, '#F5EDE3');
 });
 
-test('make-icons is repeatable: a fresh run matches the committed files byte for byte', async () => {
+// Pixels, not PNG bytes: the compressed bytes may differ between zlib versions (local Node vs CI).
+test('make-icons is repeatable: a fresh run matches the committed files pixel for pixel', async () => {
   const dir = mkdtempSync(path.join(os.tmpdir(), 'icons-'));
   try {
     for (const rel of await makeIcons(dir)) {
-      assert.ok(readFileSync(path.join(dir, rel)).equals(readFileSync(path.join(ROOT, rel))), `${rel} differs; run node scripts/make-icons.mjs`);
+      const fresh = await readPng(path.join(dir, rel));
+      const committed = await readPng(path.join(ROOT, rel));
+      assert.equal(fresh.width, committed.width, rel);
+      assert.ok(Buffer.from(fresh.data).equals(Buffer.from(committed.data)), `${rel} differs; run node scripts/make-icons.mjs`);
     }
   } finally {
     rmSync(dir, { recursive: true, force: true });
