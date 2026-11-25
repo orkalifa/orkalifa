@@ -50,6 +50,28 @@ const available = out
   .filter((id) => /^[a-z0-9.\-]+$/.test(id) && id.includes('-'));
 
 const pick = prefs.find((id) => available.includes(id)) ?? null;
-const result = { role, pick, preferred: prefs[0], fallback: pick !== prefs[0], available };
+// On the "Individual" plan the premium Gemini 4 models vanish from `agy models` once the weekly quota is used up,
+// and even a listed model can then fail with "Individual quota reached". `--probe` sends a 1-line prompt to the pick
+// to prove it can actually run before a worker is dispatched (costs a few tokens).
+let quota = 'unchecked';
+if (pick && process.argv.includes('--probe')) {
+  try {
+    const raw = execFileSync(agyPath(), ['-p', 'Reply with exactly: OK', '--model', pick, '--output-format', 'json', '--print-timeout', '90s'], {
+      encoding: 'utf8', timeout: 120_000, stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    const m = raw.match(/\{[\s\S]*\}\s*$/);
+    const res = m ? JSON.parse(m[0]) : {};
+    quota = res.status === 'SUCCESS' ? 'ok' : `failed: ${String(res.response ?? res.error ?? raw).slice(0, 160)}`;
+  } catch (e) {
+    const text = `${e.stdout ?? ''}${e.stderr ?? ''}${e.message ?? ''}`;
+    quota = /quota/i.test(text) ? `exhausted: ${(text.match(/Resets in [^.\n"]+/) ?? ['?'])[0]}` : `failed: ${text.slice(0, 160)}`;
+  }
+}
+const premiumMissing = !available.some((id) => /gemini-4-(neon|carbon|argon)/.test(id));
+const result = {
+  role, pick, preferred: prefs[0], fallback: pick !== prefs[0], quota,
+  note: premiumMissing ? 'Neon/Carbon/Argon are not listed: on the Individual plan this usually means the weekly quota is used up.' : undefined,
+  available,
+};
 console.log(JSON.stringify(result, null, 2));
-if (!pick) process.exit(1);
+if (!pick || quota.startsWith('exhausted') || quota.startsWith('failed')) process.exit(1);

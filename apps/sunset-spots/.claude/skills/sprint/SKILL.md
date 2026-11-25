@@ -19,7 +19,17 @@ You are the manager. The whole point of the role is to put every task on the mod
 - Also scan the backlog and open decisions for anything an external model can unblock now, and start it in the same wave.
 - Write the routing table into the sprint section of TEAM.md and show it to the user.
 
-## 1b. Usage discipline (tokens are limited)
+## 1a. Routing research (once, properly, then kept fresh - do it without being asked)
+- Evidence order: (1) our own results in `project/ROUTING-SCORECARD.md`, (2) authoritative sources (vendor model cards/docs, Artificial Analysis, official leaderboards), (3) blogs only as hints. Never change routing on a single benchmark; weigh cost per completed task (price x tokens).
+- Run the literature part on other providers' budgets (Gemini Carbon, Grok with web access: `--allow Fetch --allow WebSearch --deny Bash --deny Edit --deny Write`), two independent sources, then reconcile them yourself.
+- Re-run when: a new model id appears in `pick-gemini.mjs` `available`, a scorecard row shows 2+ fix rounds for a task type, or a month has passed.
+- Budget the Gemini weekly quota (Individual plan): Neon/Carbon only where they add something (design, deep research); avoid xhigh unless it matters.
+- After every task, add one scorecard row (model, fix rounds, reviewer findings) - free, and the best data we have.
+
+## 1b. Usage discipline (tokens are limited) - measured, not guessed
+- Measure each sprint: `python .claude/skills/sprint/usage.py` (cost per manager/worker session from local logs). 2026-11-25 baseline: the MANAGER conversation was 78% of all spend and 97.6% of tokens were cache re-reads; workers were 22%.
+- Therefore the manager must stay lean: a fresh session per sprint, few turns, batch tool calls in one message, no status-only turns, no polling, read diff stats/risky hunks not whole files, let scripts do integration (one call).
+- Workers: Haiku for anything bounded (R7 cost $0.21, 0 fix rounds). For real code, Opus (medium/high) - on our data Sonnet cost about the same as Opus (more tokens) at lower quality; use Sonnet only where its scorecard shows 0 rounds (pure functions, focused UI fixes, assets).
 - One sprint per manager session: when a sprint ships, the manager writes the board + BRIEF and the user starts a fresh session with `/sprint` (a long conversation re-reads its whole history every turn - the biggest cost).
 - Plan phase only for M/L or sensitive tasks. Small, well-specified tasks (S, mechanical, Haiku) go straight to execution; the quality gate + manager review still apply.
 - Creative variants: at most 2 in parallel (one Claude, one Gemini), on the best available tier - not 3-4.
@@ -29,7 +39,7 @@ You are the manager. The whole point of the role is to put every task on the mod
 ## 2. Dispatch
 - Fill `project/templates/worker-spec.md` (house rules, domain pitfalls, definition of done), save it to the scratchpad, then:
   `orca orchestration worker-start --environment local --spec-file <f> --worktree name:team-<role> --agent claude --model <claude-sonnet-5-5|claude-opus-5-5|claude-haiku-5-5|claude-fable-5-2> --effort <low|medium|high|xhigh> --task-title "<id> ... (plan)" --json`
-  Gemini: FIRST run `node .claude/skills/sprint/pick-gemini.mjs <creative|research|quick>` (from apps/sunset-spots). It asks Antigravity which models the account has right now and prints `pick`; use `--worktree name:team-gemini --agent antigravity --model <pick>` (no plan phase for non-code work). If it says `fallback: true`, tell the user which model runs instead of the preferred one BEFORE dispatching. Never pass a model id that isn't in `available`: in interactive mode Antigravity silently falls back to another model.
+  Gemini: FIRST run `node .claude/skills/sprint/pick-gemini.mjs <creative|research|code|quick> --probe` (from apps/sunset-spots); exit code 1 = no usable Gemini right now (weekly quota exhausted or model missing) - do NOT dispatch, route elsewhere and tell the user when it resets. It asks Antigravity which models the account has right now and prints `pick`; use `--worktree name:team-gemini --agent antigravity --model <pick>` (no plan phase for non-code work). If it says `fallback: true`, tell the user which model runs instead of the preferred one BEFORE dispatching. Never pass a model id that isn't in `available`: in interactive mode Antigravity silently falls back to another model.
 - After every start, verify the real model: Claude workers via process args (`--model`), Gemini via `orca orchestration worker-read --dispatch <id>` (the status line shows e.g. "Gemini 4 Hydrogen (High)").
 - Start parallel workers from one shell command (see Orca's parallel-start reference), then end the turn; Orca wakes you.
 

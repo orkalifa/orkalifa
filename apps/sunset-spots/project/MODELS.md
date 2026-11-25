@@ -37,6 +37,7 @@
 | Antigravity | `claude-opus-5-5-*` / `claude-sonnet-5-5-*` | **גיבוי לתקציב של Claude:** אותו Claude, אבל על המכסה של Google. רק אם המכסה של Claude Code נגמרת |
 | Grok | `grok-4.7` effort high | אימות נוסחה. `--effort xhigh` רק לנוסחה מסובכת |
 
+**לפי הנתונים שלנו (usage.py, 2026-11-25):** Sonnet עלה בערך כמו Opus למשימה, כי השתמש ביותר טוקנים. לכן לקוד אמיתי Opus (medium או high), Sonnet רק לסוגים שבהם יש לו 0 סבבים בכרטיס הניקוד, ו־Haiku לכל דבר תחום.
 **תיקון (2026-11-25):** בעדכון הקודם הגזמתי כשקבעתי ש־"Sonnet ברירת המחדל לכל קוד". Opus חזק יותר בכללי, ו־Sonnet זול יותר רק במעט לכל משימה. החלוקה: Opus לרגיש או מורכב, Sonnet למוגדר היטב, Haiku למכני. המקורות: טבלאות Anthropic, Artificial Analysis ובלוגים, שחלוקים בפרטים.
 **רמת מאמץ (effort):** `low` למכני, `medium` לרגיל, `high` לקוד רגיש או מורכב, ו־`xhigh` לקשה באמת.
 **איך:** `orca orchestration worker-start ... --agent claude --model claude-sonnet-5-5 --effort medium`. ל־Gemini: קודם `node .claude/skills/sprint/pick-gemini.mjs <creative|research|code|quick>`.
