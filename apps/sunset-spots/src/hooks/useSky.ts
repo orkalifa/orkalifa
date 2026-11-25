@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { fetchSkyVerdict, type SkyVerdict } from '../lib/sky';
+import { fetchSkyVerdict, skyRequestKey, type SkyVerdict } from '../lib/sky';
 import type { Coords } from './useLocation';
 
 /**
@@ -8,11 +8,13 @@ import type { Coords } from './useLocation';
  */
 export function useSky(coords: Coords | null, bearing: number | null, sunset: Date | null): SkyVerdict | null {
   const [verdict, setVerdict] = useState<SkyVerdict | null>(null);
-  // Refetch only when you move ~1 km, or for a different sunset (not every second).
-  const lat = coords ? Math.round(coords.latitude * 100) / 100 : null;
-  const lon = coords ? Math.round(coords.longitude * 100) / 100 : null;
-  const sunsetMs = sunset ? Math.round(sunset.getTime() / 60000) * 60000 : null;
-  const roundedBearing = bearing === null ? null : Math.round(bearing);
+  // Refetch only when you move into another ~1.1 km sky cell, or for a different sunset (not every
+  // second). The key is the same snapped values the request is built from (see skyRequestKey).
+  const key = skyRequestKey(coords, bearing, sunset);
+  const lat = key?.lat ?? null;
+  const lon = key?.lon ?? null;
+  const sunsetMs = key?.sunsetMs ?? null;
+  const roundedBearing = key?.bearing ?? null;
 
   useEffect(() => {
     if (lat === null || lon === null || sunsetMs === null || roundedBearing === null) return;

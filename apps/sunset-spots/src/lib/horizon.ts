@@ -39,14 +39,19 @@ const roundTo = (x: number, decimals: number) => {
 const wrapLon = (lon: number) => ((((lon + 180) % 360) + 360) % 360) - 180;
 
 /**
- * Longitude step of the privacy grid at a (rounded) latitude, in degrees. A degree of longitude shrinks
- * with cos(lat), so a fixed 0.001° would be ~94 m wide in Israel but ~56 m at 60°N. The step is
- * 360/n with n = floor(360·cos(lat)/0.001): about 0.001/cos(lat), so every cell is ~111 m east-west
- * like it is north-south, never narrower. Because it divides 360 exactly, the cells line up across the
- * antimeridian (no thin sliver cell there), and n ≥ 1 caps it at 360° near the poles (no NaN/Infinity).
+ * Longitude step of a privacy grid whose cells are `stepDeg` tall, at a latitude already rounded to
+ * that grid, in degrees. The default is the saved-places grid (0.001°, ~111 m); the sky forecast uses
+ * 0.01° (~1.1 km, see sky.ts). A degree of longitude shrinks with cos(lat), so a fixed 0.001° would be
+ * ~94 m wide in Israel but ~56 m at 60°N. The step is 360/n with n = floor(360·cos(edge)/stepDeg),
+ * where `edge` is the cell's edge nearer the pole (|lat| + half a step): every cell is at least as
+ * wide east-west as it is tall, along its whole height, never narrower (even within half a step of
+ * a pole, where cos(lat) alone let it shrink to about half). Because it divides 360 exactly, the cells
+ * line up across the antimeridian (no thin sliver cell there), and n ≥ 1 caps it at 360° at the poles
+ * (no NaN/Infinity).
  */
-export function privateLonStep(roundedLat: number): number {
-  const cells = Math.floor((360 * Math.cos((roundedLat * Math.PI) / 180)) / PRIVATE_STEP_DEG);
+export function privateLonStep(roundedLat: number, stepDeg: number = PRIVATE_STEP_DEG): number {
+  const edgeLat = Math.min(90, Math.abs(roundedLat) + stepDeg / 2);
+  const cells = Math.floor((360 * Math.cos((edgeLat * Math.PI) / 180)) / stepDeg);
   return 360 / Math.max(1, cells);
 }
 
