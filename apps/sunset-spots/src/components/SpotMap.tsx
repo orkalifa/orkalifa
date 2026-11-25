@@ -5,7 +5,9 @@ import type { LatLon } from '../lib/geo';
 import { edgePoint, layoutLabels, makeProjection, shapePath, type Box, type PlacedLabel, type Projection } from '../lib/mapview';
 import type { AreaKind, MapLayers } from '../lib/tiles';
 import type { ShownSpot } from '../lib/travel';
+import { CREDIT_URLS, MAP_CREDIT_LABEL } from '../lib/credits';
 import { colors, fonts } from '../theme';
+import { ExternalLink } from './ExternalLink';
 import { ICON_PATHS, PIN_PATH } from './SpotPin';
 
 const LABELLED = 3;
@@ -121,6 +123,13 @@ export function SpotMap({ from, sunsetBearing, spots, layers, range, height, top
           />
         </Svg>
       )}
+      {/* ODbL: the map credit stays visible by default. Kept above the sheet, which overlaps the map's bottom edge. */}
+      <ExternalLink
+        url={CREDIT_URLS.osmCopyright}
+        label={MAP_CREDIT_LABEL}
+        style={styles.credit}
+        textStyle={styles.creditText}
+      />
     </Pressable>
   );
 }
@@ -320,4 +329,12 @@ function Overlay({
 
 const styles = StyleSheet.create({
   box: { overflow: 'hidden', backgroundColor: MAP.ground },
+  credit: {
+    position: 'absolute',
+    end: 4,
+    bottom: 24,
+    borderRadius: 8,
+    backgroundColor: 'rgba(252, 248, 242, 0.7)',
+  },
+  creditText: { fontFamily: fonts.regular, fontSize: 10, color: colors.muted, textDecorationLine: 'none' },
 });

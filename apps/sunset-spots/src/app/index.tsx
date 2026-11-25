@@ -6,6 +6,7 @@ import Svg, { Circle, Path } from 'react-native-svg';
 import { AddSpotSheet } from '../components/AddSpotSheet';
 import { MySpotsButton, MySpotsSheet } from '../components/MySpotsSheet';
 import { CompassButton, CompassSheet } from '../components/CompassSheet';
+import { CreditsFooter } from '../components/CreditsSheet';
 import { SpotDetailSheet } from '../components/SpotDetailSheet';
 import { SpotList } from '../components/SpotList';
 import { SpotMap } from '../components/SpotMap';
@@ -326,9 +327,7 @@ export default function SunsetScreen() {
             )}
           </View>
 
-          <Text style={styles.attribution}>
-            מפה: OpenFreeMap © OpenMapTiles · נתונים: © OpenStreetMap contributors · גובה: Open-Meteo
-          </Text>
+          <CreditsFooter />
         </View>
       </ScrollView>
 
@@ -634,5 +633,4 @@ const styles = StyleSheet.create({
   buttonText: { fontFamily: fonts.semibold, fontSize: 14, color: '#FFF7ED' },
   muted: { fontFamily: fonts.regular, fontSize: 14.5, color: colors.muted, textAlign: 'center' },
   soon: { fontFamily: fonts.regular, fontSize: 12.5, color: colors.muted, textAlign: 'center' },
-  attribution: { fontFamily: fonts.regular, fontSize: 11, color: colors.mutedSoft, textAlign: 'center', paddingTop: 4 },
 });
