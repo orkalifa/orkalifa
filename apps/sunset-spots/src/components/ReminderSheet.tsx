@@ -102,14 +102,14 @@ export function ReminderSheet({ visible, lat, lon, onClose }: Props) {
 
           <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
             <Text style={styles.sectionTitle}>מתי</Text>
-            <View style={styles.chips}>
+            <View style={styles.chips} accessibilityRole="radiogroup">
               {DAY_OPTIONS.map((o) => (
                 <Chip key={o.value} label={o.label} selected={prefs.days === o.value} onPress={() => choose({ ...prefs, days: o.value })} />
               ))}
             </View>
 
             <Text style={styles.sectionTitle}>להזכיר</Text>
-            <View style={styles.chips}>
+            <View style={styles.chips} accessibilityRole="radiogroup">
               {LEAD_OPTIONS.map((m) => (
                 <Chip key={m} label={`${m} דק'`} selected={prefs.lead === m} onPress={() => choose({ ...prefs, lead: m })} />
               ))}
@@ -152,6 +152,7 @@ function Chip({ label, selected, onPress }: { label: string; selected: boolean; 
       style={[styles.chip, selected && styles.chipOn]}
       accessibilityRole="radio"
       accessibilityState={{ selected, checked: selected }}
+      aria-checked={selected}
     >
       <Text style={[styles.chipText, selected && styles.chipTextOn]}>{label}</Text>
     </PressableScale>
