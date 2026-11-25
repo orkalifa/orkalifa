@@ -21,7 +21,8 @@ DOMAIN PITFALLS (keep the ones that apply; the reviewer checks them):
 - Service worker: call event.waitUntil synchronously in the handler (deferred promise); every path settles it.
 - Caches/storage: version or key by content; size cap + expiry; corrupt data -> empty, not crash.
 - Privacy: anything leaving the device is rounded (saved places ~100 m, sky ~1 km); comments state exactly what leaves.
-- UI: main screen stays minimal; respect reduced motion; RTL; touch targets >= 44 px.
+- UI: main screen stays minimal; respect reduced motion; RTL; touch targets >= 44 px. Read project/DESIGN-REFS.md (the user's style reference) for any UI/design task. Time-dependent UI: screenshots at several moments (start/middle/end).
+- Removing or renaming visible text: grep scripts/smoke-live.mjs and tests for it and update them.
 
 DEFINITION OF DONE for this task type: {dod}
 (code: tests/typecheck/lint green | UI: + Expo web screenshot + Android emulator screenshot in docs/ | formula: + manager runs a Grok check | sensitive: + manager runs a Codex review)
