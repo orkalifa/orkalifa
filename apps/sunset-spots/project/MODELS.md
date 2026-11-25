@@ -33,7 +33,7 @@
 | עברית בממשק | **Opus 5.5** | | GPT-OSS, Luna |
 | תמונות | **Nano Banana** (Antigravity) | Canva, או המשתמש/ת באפליקציית Gemini מפרומפט שהמנהל כותב | מודל טקסט |
 | תזמור | **Opus 5.5** (המנהל) | | Gemini Orchestrator (המבצע תמיד Hydrogen) |
-| Claude Code הגיע למכסה | Claude 5.5 דרך Antigravity | | Fable (לא בתוכנית, רק באישור מפורש) |
+| Claude Code הגיע למכסה | Claude דרך Antigravity (ב־25.11 זמינים שם רק `claude-opus-4-6-thinking` ו־`claude-sonnet-4-6`, ישנים מ־5.5) | | Fable (לא בתוכנית, רק באישור מפורש) |
 
 **שלב תוכנית** רק למשימות M/L או רגישות. **רמות מאמץ:** low למכני, medium לרגיל, high לרגיש, xhigh לקשה באמת.
 
