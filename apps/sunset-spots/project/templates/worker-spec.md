@@ -16,6 +16,8 @@ HOUSE RULES (learned the hard way, see project/LESSONS.md):
 DOMAIN PITFALLS (keep the ones that apply; the reviewer checks them):
 - Untrusted input (links, storage, network JSON): cap raw length BEFORE any regex/split/Array.from; strict whitelist formats; malformed data -> safe default, never a crash.
 - Async & lifecycle: clear every timer; no setState after unmount; a superseded request can't overwrite newer state; after a failure something must schedule the retry; module-level maps need pruning + a cap.
+- UI sheets/modals with async work: a result (storage read, download, network) that lands after the user acted, closed or reopened must be dropped - use an open/close generation and a 'touched' flag; clear status on open.
+- Real-world facts (laws, standards, time zones, DST rules): verify against an authoritative source or Intl/ICU in a test; flag it if the spec's fact looks wrong.
 - Service worker: call event.waitUntil synchronously in the handler (deferred promise); every path settles it.
 - Caches/storage: version or key by content; size cap + expiry; corrupt data -> empty, not crash.
 - Privacy: anything leaving the device is rounded (saved places ~100 m, sky ~1 km); comments state exactly what leaves.

@@ -27,6 +27,8 @@ You are the manager. The whole point of the role is to put every task on the mod
 
 ## 3. Review - every plan, then every result
 - Plan: verify its claims against the code (read the lines); check file ownership and conflicts; add missing pitfalls; approve with explicit corrections via `orca orchestration send --to dispatch:<id> --body-file <f>`.
+- External checks (Codex/Grok): always run in the background with output written to a file (an interrupted foreground run loses the answer). Grok: include all needed code in the prompt and say "reasoning only, do NOT run tools".
+- Hold a plan's approval when a parallel research task can change it (e.g. F1b waited for F1d).
 - Result: read the diff yourself; rerun tests/typecheck in the worktree; run the required external check (Codex/Grok) in parallel; verify every external finding in the code before acting. Reject false ones with a reason; file marginal ones in the backlog; send real ones back as a NEW commit.
 - A worker stuck on a permission prompt: don't approve risky commands for it; send the safe alternative.
 
