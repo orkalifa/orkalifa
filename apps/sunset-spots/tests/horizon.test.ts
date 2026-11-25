@@ -101,7 +101,9 @@ test("a saved ('mine') spot leaves the phone only snapped to the ~111 m grid", (
   // The longitude sits on that latitude's grid: a whole number of steps from 0 (the URL keeps 5 decimals).
   const steps = lon / privateLonStep(31.435);
   assert.ok(Math.abs(steps - Math.round(steps)) < 0.01, `spot longitude ${lon} is off the grid`);
-  assert.equal(lon, 34.61198);
+  // D7b: the step is measured at the cell's poleward edge, so n is 1–2 cells smaller than in D7 and
+  // the point moved ~12 m (was 34.61198).
+  assert.equal(lon, 34.61209);
   for (const [a, b] of pairs) {
     assert.notEqual(a, 31.43457);
     assert.notEqual(b, 34.61235);
@@ -179,10 +181,17 @@ test('privacy grid: no latitude gets an east-west cell narrower than north-south
     const width = privateLonStep(lat) * METRES_PER_DEG * cosDeg(lat);
     assert.ok(width >= 111 && width < 112, `${lat}: ${width} m`);
   }
-  for (const lat of [89.9, 89.99, 89.999]) {
+  for (const lat of [89.9, 89.99]) {
     const width = privateLonStep(lat) * METRES_PER_DEG * cosDeg(lat);
     assert.ok(width >= 100 && width < 120, `${lat}: ${width} m`);
   }
+  // Within half a step of the pole the cell is measured at its poleward edge (Codex, D7): that edge
+  // stays ≥ 111 m (it was ~58 m), so the centre is wider by design.
+  const step = privateLonStep(89.999);
+  const edge = step * METRES_PER_DEG * cosDeg(89.9995);
+  const centre = step * METRES_PER_DEG * cosDeg(89.999);
+  assert.ok(edge >= 111, `89.999 poleward edge: ${edge} m`);
+  assert.ok(centre < 240, `89.999 centre: ${centre} m`);
 });
 
 test('privacy grid: near and at the poles it stays finite and in range', () => {
