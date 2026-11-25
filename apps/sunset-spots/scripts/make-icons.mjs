@@ -1,5 +1,5 @@
 // make-icons.mjs
-// Derives every app icon from the chosen draft (assets/drafts/icons/icon-02.png: sun behind two hills),
+// Derives every app icon from the chosen draft (assets/drafts/icons/icon-02-v1.png: sun behind two hills, two tones, hills separate at 32 px),
 // so the icons can be rebuilt the same way whenever the draft changes.
 // Run (working directory: apps/sunset-spots): node scripts/make-icons.mjs
 //
@@ -14,7 +14,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import Jimp from 'jimp-compact';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-export const SOURCE = path.join(HERE, '..', 'assets', 'drafts', 'icons', 'icon-02.png');
+export const SOURCE = path.join(HERE, '..', 'assets', 'drafts', 'icons', 'icon-02-v1.png');
 
 export const PARCHMENT = /** @type {const} */ ([0xf5, 0xed, 0xe3]);
 /** Motif width as a share of the canvas, where nothing masks it (app icon, favicon, splash). */
