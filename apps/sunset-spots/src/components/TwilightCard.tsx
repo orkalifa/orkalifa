@@ -1,7 +1,8 @@
 import { StyleSheet, Text, View } from 'react-native';
-import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
+import Svg, { Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
 import { formatClock } from '../lib/sun';
 import { colors, fonts } from '../theme';
+import { PressableScale } from './motion';
 
 type Props = {
   now: Date;
@@ -10,6 +11,8 @@ type Props = {
   blueHour: Date;
   blueHourEnd: Date;
   isTomorrow: boolean;
+  /** Opens the sunset reminder sheet; no bell without it. */
+  onRemind?: () => void;
 };
 
 /**
@@ -17,7 +20,7 @@ type Props = {
  * the sunset itself, then the blue hour (deep blue sky, -4° to -6°). In Israel the blue hour
  * lasts only ~10 minutes, so it's worth knowing exactly when.
  */
-export function TwilightCard({ now, goldenHour, sunset, blueHour, blueHourEnd, isTomorrow }: Props) {
+export function TwilightCard({ now, goldenHour, sunset, blueHour, blueHourEnd, isTomorrow, onRemind }: Props) {
   const t = now.getTime();
   const inGolden = !isTomorrow && t >= goldenHour.getTime() && t < blueHour.getTime();
   const inBlue = !isTomorrow && t >= blueHour.getTime() && t < blueHourEnd.getTime();
@@ -42,7 +45,30 @@ export function TwilightCard({ now, goldenHour, sunset, blueHour, blueHourEnd, i
         <Rect x={0} y={0} width={100} height={6} rx={3} fill="url(#twilight)" />
       </Svg>
       {isTomorrow && <Text style={styles.note}>הזמנים של מחר</Text>}
+      {onRemind && <BellButton onPress={onRemind} />}
     </View>
+  );
+}
+
+/**
+ * Small bell, no text: opens the reminder sheet. It sits on the card's top-left corner (a badge),
+ * so the three time slots keep their full width on narrow phones. 44 px touch target.
+ */
+function BellButton({ onPress }: { onPress: () => void }) {
+  return (
+    <PressableScale onPress={onPress} style={styles.bell} accessibilityRole="button" accessibilityLabel="תזכורת לשעת הזהב">
+      <View style={styles.bellDot}>
+        <Svg width={17} height={17} viewBox="0 0 24 24" fill="none">
+          <Path
+            d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15L6 16zM10 20.5a2 2 0 0 0 4 0"
+            stroke={colors.goldText}
+            strokeWidth={1.9}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </Svg>
+      </View>
+    </PressableScale>
   );
 }
 
@@ -72,5 +98,16 @@ const styles = StyleSheet.create({
   slot: { alignItems: 'center', flex: 1, gap: 2 },
   label: { fontFamily: fonts.semibold, fontSize: 12 },
   value: { fontFamily: fonts.bold, fontSize: 15, color: colors.ink },
+  bell: { position: 'absolute', top: -14, left: -10, width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  bellDot: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.goldSoft,
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
   note: { fontFamily: fonts.regular, fontSize: 11.5, color: colors.muted, textAlign: 'center' },
 });

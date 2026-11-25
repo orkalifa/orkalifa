@@ -11,6 +11,7 @@ import { SpotDetailSheet } from '../components/SpotDetailSheet';
 import { SpotList } from '../components/SpotList';
 import { SpotMap } from '../components/SpotMap';
 import { TwilightCard } from '../components/TwilightCard';
+import { ReminderSheet } from '../components/ReminderSheet';
 import { Settle } from '../components/motion';
 import { useHorizons } from '../hooks/useHorizons';
 import { useLocation } from '../hooks/useLocation';
@@ -100,6 +101,7 @@ export default function SunsetScreen() {
   const horizons = useHorizons(pool, coords, info?.bearing ?? null);
   const [compassOpen, setCompassOpen] = useState(false);
   const [mineOpen, setMineOpen] = useState(false);
+  const [remindOpen, setRemindOpen] = useState(false);
   /** The place being named and saved, and how it's described in the sheet. */
   const [toSave, setToSave] = useState<{ point: LatLon; subtitle: string } | null>(null);
   const [selectedSpotId, setSelectedSpotId] = useState<string | null>(() => shared?.id ?? null);
@@ -278,6 +280,7 @@ export default function SunsetScreen() {
               blueHour={light.blueHour}
               blueHourEnd={light.blueHourEnd}
               isTomorrow={light.isTomorrow}
+              onRemind={() => setRemindOpen(true)}
             />
           )}
 
@@ -356,6 +359,10 @@ export default function SunsetScreen() {
           },
         ]}
       />
+
+      {coords && (
+        <ReminderSheet visible={remindOpen} lat={coords.latitude} lon={coords.longitude} onClose={() => setRemindOpen(false)} />
+      )}
 
       <CompassSheet
         visible={compassOpen}

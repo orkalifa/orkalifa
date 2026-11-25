@@ -12,7 +12,7 @@ export const GOATCOUNTER_CODE = '';
 
 const LIVE_HOST = 'orkalifa.github.io';
 
-export type StatEvent = 'open' | 'shared-link-opened' | 'spot-shared' | 'spot-saved';
+export type StatEvent = 'open' | 'shared-link-opened' | 'spot-shared' | 'spot-saved' | 'reminder-added';
 
 /** The address that records one count, or null when counting is off here. */
 export function countUrl(event: StatEvent, code = GOATCOUNTER_CODE, host = globalThis.location?.host): string | null {
