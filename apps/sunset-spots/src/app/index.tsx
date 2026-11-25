@@ -32,7 +32,7 @@ import { parseSharedSpot, type SharedSpot } from '../lib/share';
 import { mapSpotsFor, minuteOf, reachClock, shortlist } from '../lib/shown';
 import { shareSpot } from '../lib/shareSpot';
 import { count } from '../lib/stats';
-import { bearingToHebrew, formatClock, formatCountdown, getEveningLight, getSunsetInfo } from '../lib/sun';
+import { formatClock, formatCountdown, getEveningLight, getSunsetInfo } from '../lib/sun';
 import { formatDay, unsavedVisits } from '../lib/visits';
 import type { SkyTone } from '../lib/sky';
 import { withReach, type ShownSpot } from '../lib/travel';
@@ -158,9 +158,7 @@ export default function SunsetScreen() {
   }
 
   const phase = getSkyPhase(now, info.goldenHour, info.sunset, info.isTomorrow);
-  const direction = bearingToHebrew(info.bearing);
   const sunsetClock = formatClock(info.sunset);
-  const inTimeCount = ranked ? ranked.filter((s) => s.reach.inTime).length : 0;
 
   return (
     <View style={styles.screen}>
@@ -196,10 +194,12 @@ export default function SunsetScreen() {
                   </Svg>
                 </View>
                 <View style={styles.hudTimeCol}>
-                  <Text style={styles.hudLabel} numberOfLines={1}>
-                    {info.isTomorrow ? 'השקיעה מחר' : 'השקיעה היום'}
-                    {place ? ` · ${place}` : ''}
-                  </Text>
+                  {/* Tomorrow: no day label (the countdown already says how far); just the place. */}
+                  {(!info.isTomorrow || place) && (
+                    <Text style={styles.hudLabel} numberOfLines={1}>
+                      {info.isTomorrow ? place : `השקיעה היום${place ? ` · ${place}` : ''}`}
+                    </Text>
+                  )}
                   <HudTime clock={sunsetClock} />
                 </View>
               </View>
@@ -220,9 +220,7 @@ export default function SunsetScreen() {
               <View style={[styles.progressFill, { width: `${Math.round(phase.progress * 100)}%`, backgroundColor: phase.accent }]} />
             </View>
 
-            {/* Compact golden hour & bearing ribbon (replaces bulky stat boxes) */}
             <View style={styles.hudFooter}>
-              <Text style={styles.hudMeta}>{`זהב ${formatClock(info.goldenHour)} · כיוון ${direction}`}</Text>
               {/* One line: tonight's cloud outlook when we have it, otherwise how much time is left. */}
               {sky ? (
                 <Text style={[styles.hudPhase, { color: SKY_COLOR[sky.tone] }]}>{sky.label}</Text>
@@ -275,10 +273,9 @@ export default function SunsetScreen() {
           {light && (
             <TwilightCard
               now={now}
-              goldenHour={light.goldenHour}
+              start={light.goldenHour}
               sunset={light.sunset}
-              blueHour={light.blueHour}
-              blueHourEnd={light.blueHourEnd}
+              dark={light.blueHourEnd}
               isTomorrow={light.isTomorrow}
               onRemind={() => setRemindOpen(true)}
             />
@@ -290,7 +287,7 @@ export default function SunsetScreen() {
               {ranked && ranked.length > 0 && (
                 <View style={styles.summaryPill}>
                   <Text style={styles.summaryPillText}>
-                    {inTimeCount > 0 ? `${inTimeCount} בזמן הערב` : `${ranked.length} מקומות`}
+                    {`${ranked.length} מקומות`}
                   </Text>
                 </View>
               )}
@@ -577,7 +574,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  hudMeta: { fontFamily: fonts.medium, fontSize: 12, color: '#D8C2AE' },
   hudPhase: { fontFamily: fonts.semibold, fontSize: 11.5 },
   fab: { position: 'absolute', left: 14, bottom: 38, gap: 10 },
   sheet: {
