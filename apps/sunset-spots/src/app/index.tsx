@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocalSearchParams } from 'expo-router';
-import { Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Animated, Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Path } from 'react-native-svg';
 import { AddSpotSheet } from '../components/AddSpotSheet';
@@ -45,6 +45,11 @@ const MAP_SHARE = 0.6;
 const VIEW_WEIGHT = 0.4;
 /** Space the floating sunset HUD takes over the top of the map, below the status bar. */
 const HUD_SPACE = 112;
+/**
+ * Scroll distance over which the status-bar backdrop fades in. It matches the HUD's gap below the
+ * inset, so the strip is opaque before any text reaches the system clock and battery.
+ */
+const STATUS_FADE = 10;
 /** Your own saved spots show up when they're this close, even if they aren't in the top six. */
 const MY_SPOTS_RADIUS_M = 25000;
 /** The sunset outlook's colour in the top bar: warm when it's worth going, cool when it isn't. */
@@ -64,6 +69,9 @@ export default function SunsetScreen() {
   const mySpots = useMySpots();
   const now = useNow();
   const insets = useSafeAreaInsets();
+  // How far the screen is scrolled; drives the status-bar backdrop (before the early returns: hook order).
+  // (useState, not useRef: lint forbids reading refs in render; not useAnimatedValue: react-native-web lacks it.)
+  const [scrollY] = useState(() => new Animated.Value(0));
   const { height: windowHeight } = useWindowDimensions();
   const coords = state.status === 'loading' ? null : state.coords;
   const spots = useSpots(coords);
@@ -153,7 +161,12 @@ export default function SunsetScreen() {
 
   return (
     <View style={styles.screen}>
-      <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 28 }} showsVerticalScrollIndicator={false}>
+      <Animated.ScrollView
+        contentContainerStyle={{ paddingBottom: insets.bottom + 28 }}
+        showsVerticalScrollIndicator={false}
+        scrollEventThrottle={16}
+        onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: true })}
+      >
         <View>
           <SpotMap
             from={{ lat: latitude, lon: longitude }}
@@ -330,7 +343,20 @@ export default function SunsetScreen() {
             מפה: OpenFreeMap © OpenMapTiles · נתונים: © OpenStreetMap contributors · גובה: Open-Meteo
           </Text>
         </View>
-      </ScrollView>
+      </Animated.ScrollView>
+
+      {/* The app draws edge to edge: once scrolled, content slides under a sheet-coloured strip instead of
+          the system clock and battery. At rest it's clear, so the map still reaches the top. */}
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          styles.statusBackdrop,
+          {
+            height: insets.top,
+            opacity: scrollY.interpolate({ inputRange: [0, STATUS_FADE], outputRange: [0, 1], extrapolate: 'clamp' }),
+          },
+        ]}
+      />
 
       <CompassSheet
         visible={compassOpen}
@@ -476,6 +502,7 @@ function useShownSpots({ pool, lat, lon, bearing, goldenMs, sunsetMs, minute, ho
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.sheet },
   center: { alignItems: 'center', justifyContent: 'center' },
+  statusBackdrop: { position: 'absolute', top: 0, left: 0, right: 0, backgroundColor: colors.sheet },
   hud: {
     position: 'absolute',
     left: 12,
