@@ -72,19 +72,32 @@ export const PALETTE = {
   markerGlow: '#FFD9A0',
   markerEdge: '#FFF8EC',
   textTime: '#1E120C',
-  textStart: '#3A2004',
-  textDark: '#2E1F17',
-  textCaption: '#4A1806',
+  textSoft: '#3A2A20',
   nightTime: '#FFF6EA',
-  nightStart: '#FFEBD2',
-  nightDark: '#FFF0E0',
-  nightCaption: '#FFE6CC',
+  nightSoft: '#FBE6D4',
 } as const;
 
-export type TextInk = { time: string; start: string; dark: string; caption: string };
+/**
+ * Text colours on the water. Two-tone (DESIGN-REFS item 6): `time` is the primary tone, `soft` the
+ * second tone for the labels. A true gray can't reach 4.5:1 on the water (it darkens up to
+ * WATER_VEIL_DAY before sunset), so the second tone is a deep warm brown by day, a dim cream at night.
+ */
+export type TextInk = { time: string; soft: string };
 /** Text on the light (day) water, and on the dark (night) water after sunset. */
-export const DAY_INK: TextInk = { time: PALETTE.textTime, start: PALETTE.textStart, dark: PALETTE.textDark, caption: PALETTE.textCaption };
-export const NIGHT_INK: TextInk = { time: PALETTE.nightTime, start: PALETTE.nightStart, dark: PALETTE.nightDark, caption: PALETTE.nightCaption };
+export const DAY_INK: TextInk = { time: PALETTE.textTime, soft: PALETTE.textSoft };
+export const NIGHT_INK: TextInk = { time: PALETTE.nightTime, soft: PALETTE.nightSoft };
+
+/**
+ * Grain: a small greyscale texture (assets/images/grain-wave.jpg) laid over the SKY only, so it never
+ * sits under text. Faint by day, fainter at night (it lightens a dark sky).
+ */
+export const GRAIN_OPACITY_DAY = 0.07;
+export const GRAIN_OPACITY_NIGHT = 0.05;
+/** The grain's box in view units: the sky, from the top down to the horizon. */
+export const GRAIN_BOX = { top: 0, bottom: HORIZON_Y } as const;
+export function grainOpacity(dusk: number): number {
+  return GRAIN_OPACITY_DAY + (GRAIN_OPACITY_NIGHT - GRAIN_OPACITY_DAY) * clamp01(dusk);
+}
 /** The water band's colours, before the dusk veil. */
 export const WATER_COLORS = [PALETTE.waterStart, PALETTE.waterMid, PALETTE.waterEnd] as const;
 

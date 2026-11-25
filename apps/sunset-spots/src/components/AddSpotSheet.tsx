@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { SheetModal } from './SheetModal';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MAX_NAME } from '../lib/myspots';
 import { colors, fonts } from '../theme';
@@ -27,7 +28,7 @@ export function AddSpotSheet({ visible, subtitle, onSave, onClose }: Props) {
   };
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={close}>
+    <SheetModal visible={visible} animationType="slide" transparent onRequestClose={close}>
       <KeyboardAvoidingView style={styles.backdrop} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <Pressable style={styles.scrim} onPress={close} accessibilityLabel="סגירה" />
         <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 16) + 8 }]}>
@@ -54,7 +55,7 @@ export function AddSpotSheet({ visible, subtitle, onSave, onClose }: Props) {
           </Pressable>
         </View>
       </KeyboardAvoidingView>
-    </Modal>
+    </SheetModal>
   );
 }
 

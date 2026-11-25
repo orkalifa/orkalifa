@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
-import { Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { SheetModal } from './SheetModal';
 import { useSharedValue, withSpring } from 'react-native-reanimated';
 import Svg, { Circle, Path } from 'react-native-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -27,9 +28,9 @@ export function CompassSheet({
   onClose: () => void;
 }) {
   return (
-    <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
+    <SheetModal visible={visible} animationType="slide" onRequestClose={onClose}>
       {visible && <CompassBody bearing={bearing} sunsetClock={sunsetClock} onClose={onClose} />}
-    </Modal>
+    </SheetModal>
   );
 }
 

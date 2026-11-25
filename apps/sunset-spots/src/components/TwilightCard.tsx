@@ -1,5 +1,5 @@
 import { memo, useEffect, useState } from 'react';
-import { I18nManager, StyleSheet, Text, View, type LayoutChangeEvent, type ViewStyle } from 'react-native';
+import { I18nManager, Image, StyleSheet, Text, View, type LayoutChangeEvent, type ViewStyle } from 'react-native';
 import Animated, {
   Easing,
   ReduceMotion,
@@ -11,10 +11,11 @@ import Animated, {
 } from 'react-native-reanimated';
 import Svg, { Circle, ClipPath, Defs, Ellipse, G, Line, LinearGradient, Path, RadialGradient, Rect, Stop } from 'react-native-svg';
 import { formatClock } from '../lib/sun';
-import { colors, fonts, motion } from '../theme';
+import { colors, fonts, hairline, motion } from '../theme';
 import { PressableScale } from './motion';
 import {
   DAY_INK,
+  GRAIN_BOX,
   HORIZON_Y,
   NIGHT_INK,
   PALETTE,
@@ -27,6 +28,7 @@ import {
   X_START,
   alignToSide,
   computeScene,
+  grainOpacity,
   physicalLeft,
   physicalRight,
   rayPaths,
@@ -45,6 +47,8 @@ type Props = {
   onRemind?: () => void;
 };
 
+// Greyscale grain, 1024x240 (the sky's aspect), from assets/drafts/textures/wave-01.png (see U11a commit).
+const GRAIN = require('../../assets/images/grain-wave.jpg');
 const RAYS = rayPaths();
 const MINUTE = 60_000;
 const MARKER = 22;
@@ -116,6 +120,18 @@ export function TwilightCard({ now, start, sunset, dark, isTomorrow, onRemind }:
           isTomorrow={isTomorrow}
         />
 
+        {/* Grain over the sky only: it never sits under any text. */}
+        <Image
+          source={GRAIN}
+          resizeMode="cover"
+          accessible={false}
+          pointerEvents="none"
+          style={[
+            styles.grain,
+            { top: GRAIN_BOX.top * k, height: (GRAIN_BOX.bottom - GRAIN_BOX.top) * k, opacity: grainOpacity(scene.dusk) },
+          ]}
+        />
+
         {!isTomorrow && (
           <Animated.View
             pointerEvents="none"
@@ -129,16 +145,20 @@ export function TwilightCard({ now, start, sunset, dark, isTomorrow, onRemind }:
           </Animated.View>
         )}
 
+        {/* Two-tone: the label in the second tone, the time in the first. */}
         <View pointerEvents="none" style={[styles.caption, { top: (HORIZON_Y + 5) * k, width: 96, ...physicalLeft(captionCenter - 48, dir) }]}>
-          <Text selectable={false} style={[styles.captionText, { color: ink.caption }]}>{`שקיעה ${sunsetClock}`}</Text>
+          <Text selectable={false} style={[styles.captionText, { color: ink.soft }]}>
+            {'שקיעה '}
+            <Text style={[styles.captionTime, { color: ink.time }]}>{sunsetClock}</Text>
+          </Text>
         </View>
 
         <View pointerEvents="none" style={[styles.end, physicalRight(16, dir), { alignItems: alignToSide('right', dir) }]}>
-          <Text selectable={false} style={[styles.endLabel, { color: ink.start }]}>תחילת השקיעה</Text>
+          <Text selectable={false} style={[styles.endLabel, { color: ink.soft }]}>תחילת השקיעה</Text>
           <Text selectable={false} style={[styles.endTime, styles.startTime, { color: ink.time }]}>{startClock}</Text>
         </View>
         <View pointerEvents="none" style={[styles.end, physicalLeft(16, dir), { alignItems: alignToSide('left', dir) }]}>
-          <Text selectable={false} style={[styles.endLabel, { color: ink.dark }]}>חושך</Text>
+          <Text selectable={false} style={[styles.endLabel, { color: ink.soft }]}>חושך</Text>
           <Text selectable={false} style={[styles.endTime, styles.darkTime, { color: ink.time }]}>{darkClock}</Text>
         </View>
 
@@ -223,14 +243,15 @@ const TwilightScene = memo(function TwilightScene({ minute, start, sunset, dark,
           <Stop offset="0" stopColor={PALETTE.glint} stopOpacity={0.8} />
           <Stop offset="1" stopColor={PALETTE.glint} stopOpacity={0} />
         </RadialGradient>
-        {/* Soft ends instead of a mask: the line's own gradient fades out at both edges. */}
-        <LinearGradient id="twHorizon" x1="0" y1="0" x2="1" y2="0">
+        {/* Soft ends instead of a mask: the line's own gradient fades out at both edges. User-space
+            units: a horizontal line has a zero-height bounding box, which would hide a bbox gradient. */}
+        <LinearGradient id="twHorizon" gradientUnits="userSpaceOnUse" x1={0} y1={0} x2={VIEW_W} y2={0}>
           <Stop offset="0" stopColor={PALETTE.horizon} stopOpacity={0} />
           <Stop offset="0.08" stopColor={PALETTE.horizon} stopOpacity={0.6} />
           <Stop offset="0.92" stopColor={PALETTE.horizon} stopOpacity={0.6} />
           <Stop offset="1" stopColor={PALETTE.horizon} stopOpacity={0} />
         </LinearGradient>
-        <LinearGradient id="twElapsed" x1="1" y1="0" x2="0" y2="0">
+        <LinearGradient id="twElapsed" gradientUnits="userSpaceOnUse" x1={X_START} y1={0} x2={X_DARK} y2={0}>
           <Stop offset="0" stopColor={PALETTE.elapsedStart} />
           <Stop offset="1" stopColor={PALETTE.elapsedEnd} />
         </LinearGradient>
@@ -314,15 +335,12 @@ const TwilightScene = memo(function TwilightScene({ minute, start, sunset, dark,
       <Rect x={0} y={HORIZON_Y} width={VIEW_W} height={VIEW_H - HORIZON_Y} fill={PALETTE.waterVeil} opacity={s.waterVeil} />
 
       {/* The horizon is the timeline: a hairline, the lit stretch already passed, the end ticks. */}
-      <Line x1={0} y1={HORIZON_Y} x2={VIEW_W} y2={HORIZON_Y} stroke="url(#twHorizon)" strokeWidth={1} />
+      <Line x1={0} y1={HORIZON_Y} x2={VIEW_W} y2={HORIZON_Y} stroke="url(#twHorizon)" strokeWidth={0.75} />
       {hasElapsed && (
-        <>
-          <Line x1={X_START} y1={HORIZON_Y} x2={s.x} y2={HORIZON_Y} stroke={PALETTE.elapsedStart} strokeOpacity={0.3} strokeWidth={4} strokeLinecap="round" />
-          <Line x1={X_START} y1={HORIZON_Y} x2={s.x} y2={HORIZON_Y} stroke="url(#twElapsed)" strokeWidth={1.8} strokeLinecap="round" />
-        </>
+        <Line x1={X_START} y1={HORIZON_Y} x2={s.x} y2={HORIZON_Y} stroke="url(#twElapsed)" strokeWidth={1.4} strokeLinecap="round" />
       )}
-      <Line x1={X_START} y1={HORIZON_Y - 2.5} x2={X_START} y2={HORIZON_Y + 2.5} stroke={PALETTE.textStart} strokeOpacity={0.45} strokeWidth={1.1} strokeLinecap="round" />
-      <Line x1={X_DARK} y1={HORIZON_Y - 2.5} x2={X_DARK} y2={HORIZON_Y + 2.5} stroke={PALETTE.textDark} strokeOpacity={0.45} strokeWidth={1.1} strokeLinecap="round" />
+      <Line x1={X_START} y1={HORIZON_Y - 2.5} x2={X_START} y2={HORIZON_Y + 2.5} stroke={PALETTE.textSoft} strokeOpacity={0.45} strokeWidth={0.75} strokeLinecap="round" />
+      <Line x1={X_DARK} y1={HORIZON_Y - 2.5} x2={X_DARK} y2={HORIZON_Y + 2.5} stroke={PALETTE.textSoft} strokeOpacity={0.45} strokeWidth={0.75} strokeLinecap="round" />
       {/* The exact sunset moment: one thin tick. */}
       <Line x1={s.sunsetX} y1={HORIZON_Y - 6} x2={s.sunsetX} y2={HORIZON_Y + 6} stroke={PALETTE.tick} strokeOpacity={0.7} strokeWidth={1.1} strokeLinecap="round" />
     </Svg>
@@ -364,9 +382,10 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     overflow: 'hidden',
     backgroundColor: PALETTE.skyMid,
-    borderWidth: 1,
-    borderColor: 'rgba(181, 66, 21, 0.13)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: hairline.color,
   },
+  grain: { position: 'absolute', left: 0, right: 0, width: '100%' },
   marker: { position: 'absolute', width: MARKER, height: MARKER, alignItems: 'center', justifyContent: 'center' },
   markerGlow: {
     position: 'absolute',
@@ -379,6 +398,7 @@ const styles = StyleSheet.create({
   caption: { position: 'absolute', alignItems: 'center' },
   // Labels have no background and can't be selected (a web drag-select painted them blue).
   captionText: { fontFamily: fonts.medium, fontSize: 11, userSelect: 'none' },
+  captionTime: { fontFamily: fonts.semibold, fontVariant: ['tabular-nums'] },
   end: { position: 'absolute', bottom: 9, gap: 1 },
   endLabel: { fontFamily: fonts.medium, fontSize: 11, userSelect: 'none' },
   endTime: { fontSize: 23, letterSpacing: -0.4, fontVariant: ['tabular-nums'], userSelect: 'none' },
@@ -392,7 +412,7 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     backgroundColor: 'rgba(255, 248, 236, 0.78)',
   },
-  tomorrowText: { fontFamily: fonts.medium, fontSize: 11, color: PALETTE.textStart, userSelect: 'none' },
+  tomorrowText: { fontFamily: fonts.medium, fontSize: 11, color: PALETTE.textSoft, userSelect: 'none' },
   bell: { position: 'absolute', top: 2, width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   bellDot: {
     width: 30,
@@ -401,7 +421,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(255, 248, 236, 0.82)',
-    borderWidth: 1,
-    borderColor: colors.line,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: hairline.color,
   },
 });

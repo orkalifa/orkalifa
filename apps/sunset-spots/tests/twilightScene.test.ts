@@ -1,4 +1,5 @@
 /// <reference types="node" />
+import { statSync } from 'node:fs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -7,6 +8,9 @@ import {
   SUN_R,
   SUN_TOP_Y,
   DAY_INK,
+  GRAIN_BOX,
+  GRAIN_OPACITY_DAY,
+  GRAIN_OPACITY_NIGHT,
   NIGHT_INK,
   SKY_VEIL_MAX,
   WATER_COLORS,
@@ -15,6 +19,7 @@ import {
   X_START,
   alignToSide,
   computeScene,
+  grainOpacity,
   physicalLeft,
   physicalRight,
   rayPaths,
@@ -132,6 +137,35 @@ test('every text colour stays readable (WCAG 4.5:1) on the water, every 15 s of 
       }
     }
   }
+});
+
+test('two-tone (DESIGN-REFS item 6): the second tone sits toward the water, both stay readable', () => {
+  // Day: the label is clearly lighter than the near-black time. Night: a dimmer cream (little room).
+  assert.ok(luminance(rgb(DAY_INK.soft)) >= 2 * luminance(rgb(DAY_INK.time)), 'day soft not lighter');
+  assert.ok(luminance(rgb(NIGHT_INK.soft)) * 1.1 <= luminance(rgb(NIGHT_INK.time)), 'night soft not dimmer');
+  // Worst water of each half of the evening (the full 15 s sweep above covers every moment).
+  const dayWorst = mix(rgb(PALETTE.waterEnd), rgb(PALETTE.waterVeil), at(37).waterVeil);
+  const nightWorst = mix(rgb(PALETTE.waterStart), rgb(PALETTE.waterVeil), at(37.25).waterVeil);
+  for (const c of [DAY_INK.time, DAY_INK.soft]) assert.ok(contrast(rgb(c), dayWorst) >= 4.5, c);
+  for (const c of [NIGHT_INK.time, NIGHT_INK.soft]) assert.ok(contrast(rgb(c), nightWorst) >= 4.5, c);
+});
+
+test('grain: faint, fainter at night, finite for broken input, and only over the sky', () => {
+  assert.equal(grainOpacity(0), GRAIN_OPACITY_DAY);
+  assert.equal(grainOpacity(1), GRAIN_OPACITY_NIGHT);
+  assert.equal(grainOpacity(Number.NaN), GRAIN_OPACITY_DAY);
+  for (let m = -5; m <= 70; m++) {
+    const o = grainOpacity(at(m).dusk);
+    assert.ok(o >= GRAIN_OPACITY_NIGHT && o <= GRAIN_OPACITY_DAY && o <= 0.08, `minute ${m}: ${o}`);
+  }
+  // Every text overlay sits at or below the horizon, so the grain never lies under text.
+  assert.equal(GRAIN_BOX.top, 0);
+  assert.ok(GRAIN_BOX.bottom <= HORIZON_Y);
+});
+
+test('grain asset exists and stays small (<= 60 KB)', () => {
+  const size = statSync(new URL('../assets/images/grain-wave.jpg', import.meta.url)).size;
+  assert.ok(size > 1000 && size <= 60 * 1024, `${size} bytes`);
 });
 
 test('the sky really darkens: clearly dimmer at sunset, near night at darkness', () => {

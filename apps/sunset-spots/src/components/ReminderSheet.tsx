@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { SheetModal } from './SheetModal';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { addToCalendar, webEnv } from '../lib/addToCalendar';
@@ -91,7 +92,7 @@ export function ReminderSheet({ visible, lat, lon, onClose }: Props) {
   };
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+    <SheetModal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <View style={styles.backdrop}>
         <Pressable style={styles.scrim} onPress={onClose} accessibilityLabel="סגירה" />
         <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 16) + 8 }]}>
@@ -102,14 +103,14 @@ export function ReminderSheet({ visible, lat, lon, onClose }: Props) {
 
           <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
             <Text style={styles.sectionTitle}>מתי</Text>
-            <View style={styles.chips}>
+            <View style={styles.chips} accessibilityRole="radiogroup">
               {DAY_OPTIONS.map((o) => (
                 <Chip key={o.value} label={o.label} selected={prefs.days === o.value} onPress={() => choose({ ...prefs, days: o.value })} />
               ))}
             </View>
 
             <Text style={styles.sectionTitle}>להזכיר</Text>
-            <View style={styles.chips}>
+            <View style={styles.chips} accessibilityRole="radiogroup">
               {LEAD_OPTIONS.map((m) => (
                 <Chip key={m} label={`${m} דק'`} selected={prefs.lead === m} onPress={() => choose({ ...prefs, lead: m })} />
               ))}
@@ -141,7 +142,7 @@ export function ReminderSheet({ visible, lat, lon, onClose }: Props) {
           </ScrollView>
         </View>
       </View>
-    </Modal>
+    </SheetModal>
   );
 }
 
@@ -152,6 +153,7 @@ function Chip({ label, selected, onPress }: { label: string; selected: boolean; 
       style={[styles.chip, selected && styles.chipOn]}
       accessibilityRole="radio"
       accessibilityState={{ selected, checked: selected }}
+      aria-checked={selected}
     >
       <Text style={[styles.chipText, selected && styles.chipTextOn]}>{label}</Text>
     </PressableScale>
