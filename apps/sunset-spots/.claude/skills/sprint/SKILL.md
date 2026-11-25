@@ -9,7 +9,7 @@ You are the manager. The whole point of the role is to put every task on the mod
 
 ## 1. Plan - with the routing gate
 - Choose tasks: highest user value first; respect the user's decisions; group by files so parallel tasks never touch the same file (same file -> sequential). Max ~4 workers at once.
-- **Routing gate (mandatory, never skip).** For EVERY task write a row: task | owner | provider + model + effort | why. Two decisions per task: (1) which PROVIDER is best (below), (2) which TIER inside it (see the tier table in MODELS.md: Fable 5.2 only for the truly hard; Opus 5.5 for sensitive/complex code; Sonnet 5.5 for well-specified features, UI, tests; Haiku 5.5 for mechanical/docs; same idea for Codex luna/terra and Gemini flash/argon). Never default every worker to the same model. Pass it with `--model <id> --effort <level>`. Ask:
+- **Routing gate (mandatory, never skip).** For EVERY task write a row: task | owner | provider + model + effort | why. Two decisions per task: (1) which PROVIDER is best (below), (2) which TIER inside it (see the tier table in MODELS.md: Fable 5.2 is NOT in the user's plan (needs paid usage credits) - never route to it without the user's explicit OK; Opus 5.5 is the strongest available: sensitive or complex code (storage, strict formats, privacy, SW, cross-cutting architecture), plan review and the manager; Sonnet 5.5 for well-specified features, UI, fixes, tests (close to Opus on routine code, but ~60% more tokens per task, so only ~20% cheaper per finished task); Haiku 5.5 (`high`) for bounded tasks: docs, tests-only, small focused fixes; Gemini Orchestrator is not used (executor is always Hydrogen); same idea for Codex luna/terra and Gemini flash/argon). Never default every worker to the same model. Pass it with `--model <id> --effort <level>`. Ask:
   - Needs an image or visual asset? -> **Gemini** (Antigravity, worktree `team-gemini`).
   - Needs fresh facts from the web (names, trademarks, terms, store rules, competitors)? -> **Gemini** (Google-grounded). Social/X sentiment -> **Grok**.
   - Changes a formula, scoring, physics or math? -> Claude implements, **Grok verifies** (`grok -p "<formula + cases>" -m grok-4.7 --effort high`).
@@ -19,10 +19,18 @@ You are the manager. The whole point of the role is to put every task on the mod
 - Also scan the backlog and open decisions for anything an external model can unblock now, and start it in the same wave.
 - Write the routing table into the sprint section of TEAM.md and show it to the user.
 
+## 1b. Usage discipline (tokens are limited)
+- One sprint per manager session: when a sprint ships, the manager writes the board + BRIEF and the user starts a fresh session with `/sprint` (a long conversation re-reads its whole history every turn - the biggest cost).
+- Plan phase only for M/L or sensitive tasks. Small, well-specified tasks (S, mechanical, Haiku) go straight to execution; the quality gate + manager review still apply.
+- Creative variants: at most 2 in parallel (one Claude, one Gemini), on the best available tier - not 3-4.
+- Offload to the other providers' budgets where they fit (Gemini, Codex, Grok have separate quotas); don't duplicate a review that one reviewer already covers.
+- Review cheaply: read the diff stat + the risky hunks, small contact sheets instead of full screenshots, saved output files instead of re-running.
+
 ## 2. Dispatch
 - Fill `project/templates/worker-spec.md` (house rules, domain pitfalls, definition of done), save it to the scratchpad, then:
   `orca orchestration worker-start --environment local --spec-file <f> --worktree name:team-<role> --agent claude --model <claude-sonnet-5-5|claude-opus-5-5|claude-haiku-5-5|claude-fable-5-2> --effort <low|medium|high|xhigh> --task-title "<id> ... (plan)" --json`
-  Gemini: `--worktree name:team-gemini --agent antigravity --model gemini-4-argon-high` (no plan phase for non-code work).
+  Gemini: FIRST run `node .claude/skills/sprint/pick-gemini.mjs <creative|research|quick>` (from apps/sunset-spots). It asks Antigravity which models the account has right now and prints `pick`; use `--worktree name:team-gemini --agent antigravity --model <pick>` (no plan phase for non-code work). If it says `fallback: true`, tell the user which model runs instead of the preferred one BEFORE dispatching. Never pass a model id that isn't in `available`: in interactive mode Antigravity silently falls back to another model.
+- After every start, verify the real model: Claude workers via process args (`--model`), Gemini via `orca orchestration worker-read --dispatch <id>` (the status line shows e.g. "Gemini 4 Hydrogen (High)").
 - Start parallel workers from one shell command (see Orca's parallel-start reference), then end the turn; Orca wakes you.
 
 ## 3. Review - every plan, then every result
