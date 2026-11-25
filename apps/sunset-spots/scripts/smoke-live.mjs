@@ -38,7 +38,8 @@ async function check() {
   try {
     const res = await page.goto(URL_, { waitUntil: 'domcontentloaded', timeout: TIMEOUT_MS });
     if (!res || !res.ok()) throw new Error(`page returned HTTP ${res?.status()}`);
-    await page.getByText(/השקיעה (היום|מחר)/).first().waitFor({ timeout: TIMEOUT_MS });
+    // The twilight card always shows "תחילת השקיעה"; the HUD day label is hidden after sunset (U17).
+    await page.getByText(/תחילת השקיעה/).first().waitFor({ timeout: TIMEOUT_MS });
     await page.getByText('מקומות לשקיעה סביבך').first().waitFor({ timeout: TIMEOUT_MS });
     if (errors.length) throw new Error(`script errors: ${errors.slice(0, 3).join(' | ')}`);
   } catch (e) {
