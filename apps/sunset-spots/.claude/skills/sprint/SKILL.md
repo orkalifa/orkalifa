@@ -27,7 +27,7 @@ You are the manager. The whole point of the role is to put every task on the mod
 - Workers: quality first - Opus for all real code (Sonnet is not cheaper per finished task: more tokens; lower quality). Haiku only for text/docs/mechanical work. Savings come from a lean manager and fewer rework rounds, never from a weaker coder.
 - One sprint per manager session: when a sprint ships, the manager writes the board + BRIEF and the user starts a fresh session with `/sprint` (a long conversation re-reads its whole history every turn - the biggest cost).
 - Plan phase only for M/L or sensitive tasks. Small, well-specified tasks (S, mechanical, Haiku) go straight to execution; the quality gate + manager review still apply.
-- Creative variants: at most 2 in parallel (one Claude, one Gemini), on the best available tier - not 3-4.
+- Creative variants: at most 2 in parallel (one Claude, one Gemini), on the best available tier - not 3-4. Variants screenshot on web only; the Android emulator shot is taken once, for the chosen variant (emulators burned the Claude quota in sprint 5).
 - Offload to the other providers' budgets where they fit (Gemini, Codex, Grok have separate quotas); don't duplicate a review that one reviewer already covers.
 - Review cheaply: read the diff stat + the risky hunks, small contact sheets instead of full screenshots, saved output files instead of re-running.
 
@@ -43,7 +43,8 @@ You are the manager. The whole point of the role is to put every task on the mod
 - External checks (Codex/Grok): always run in the background with output written to a file (an interrupted foreground run loses the answer). Grok: include all needed code in the prompt and say "reasoning only, do NOT run tools".
 - Hold a plan's approval when a parallel research task can change it (e.g. F1b waited for F1d).
 - Result: read the diff yourself; rerun tests/typecheck in the worktree; run the required external check (Codex/Grok) in parallel; verify every external finding in the code before acting. Reject false ones with a reason; file marginal ones in the backlog; send real ones back as a NEW commit.
-- A worker stuck on a permission prompt: don't approve risky commands for it; send the safe alternative.
+- A worker stuck on a permission prompt: don't approve risky commands for it; send the safe alternative. Antigravity asks even for `orca orchestration send` and test/build commands: read the command, then approve with `orca terminal send --terminal <h> --enter`.
+- `start-unconfirmed` escalation: `worker-read`; an empty prompt means the brief was lost -> `worker-stop`, start again.
 
 ## 4. Integrate and ship
 - Trial-merge all branches into `integ/sprint<N>` in a temp worktree (junction node_modules from the main app), run tests/typecheck/lint, `EXPO_OFFLINE=1 CI=1 npm run build:web`, and a local smoke (`scripts/smoke-live.mjs` against a small static server on /orkalifa/).
