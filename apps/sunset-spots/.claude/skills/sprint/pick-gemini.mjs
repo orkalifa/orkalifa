@@ -3,7 +3,7 @@
 // Why: when Orca starts an Antigravity worker with a model the account doesn't have (2026-11-25: Argon),
 // agy silently falls back to another model in interactive mode. Asking agy first avoids that.
 //
-// Usage: node pick-gemini.mjs <creative|research|code|quick>
+// Usage: node pick-gemini.mjs <creative|research|code|math|quick>
 // Prints JSON: { pick, preferred, fallback, available } - pass `pick` to
 //   orca orchestration worker-start ... --agent antigravity --model <pick>
 // If `fallback` is true, the preferred model is missing: tell the user which one ran instead.
@@ -16,8 +16,10 @@ const PREFERENCES = {
   creative: ['gemini-4-neon-xhigh', 'gemini-4-neon-high', 'gemini-4-carbon-high', 'gemini-4-hydrogen-xhigh', 'gemini-4-argon-high', 'gemini-3.8-flash-high'],
   // Deep, Google-grounded research (names, trademarks, terms, store rules). Carbon = slowest, deepest.
   research: ['gemini-4-carbon-high', 'gemini-4-neon-high', 'gemini-4-neon-medium', 'gemini-4-hydrogen-high', 'gemini-4-argon-medium', 'gemini-3.8-flash-high'],
-  // Code work or a third-opinion code review (Neon tops the coding-agent index among Gemini 4).
-  code: ['gemini-4-neon-high', 'gemini-4-carbon-high', 'gemini-4-hydrogen-high', 'gemini-4-argon-high'],
+  // Math/formula verification (with code execution).
+  math: ['gemini-4-neon-xhigh', 'gemini-4-neon-high', 'gemini-4-carbon-high'],
+  // Code work or a cross-family code review (Neon tops the coding-agent index among Gemini 4).
+  code: ['gemini-4-carbon-high', 'gemini-4-neon-high', 'gemini-4-hydrogen-high', 'gemini-4-argon-high'],
   // Short lookups and summaries: fast and cheap.
   quick: ['gemini-3.8-flash-medium', 'gemini-3.8-flash-high', 'gemini-4-hydrogen-low', 'gemini-4-hydrogen-medium'],
 };
